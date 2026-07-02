@@ -177,12 +177,27 @@ class LandingAnalysisApp(tk.Tk):
             ("use_resistance_tp", "阻力停利"),
             ("breakout_buy", "突破加碼"),
             ("trend_ma_filter", "MA50 趨勢過濾"),
+            ("require_macd", "MACD 多頭確認"),
+            ("require_volume_shrink", "量縮確認"),
+            ("require_candlestick", "K 棒確認"),
+            ("use_macd_exit", "MACD 死叉出場"),
+            ("volume_expand_breakout", "突破放量"),
         ]:
             var = tk.BooleanVar(value=False)
             self._param_vars[key] = var
             cb = ttk.Checkbutton(parent, text=label, variable=var, command=self._on_custom_param_change)
             cb.pack(anchor=tk.W, pady=2)
             self._custom_widgets.append(cb)
+
+        row = ttk.Frame(parent)
+        row.pack(fill=tk.X, pady=2)
+        ttk.Label(row, text="訊號確認數", width=14).pack(side=tk.LEFT)
+        var = tk.IntVar(value=0)
+        self._param_vars["signal_confirm_min"] = var
+        spin = ttk.Spinbox(row, from_=0, to=3, textvariable=var, width=10, command=self._on_custom_param_change)
+        spin.pack(side=tk.RIGHT)
+        self._custom_widgets.append(spin)
+        ttk.Label(parent, text="0=全部通過，2=三選二", foreground="#666", font=("Segoe UI", 8)).pack(anchor=tk.W)
 
     def _set_custom_enabled(self, enabled: bool):
         state = "normal" if enabled else "disabled"
@@ -213,6 +228,12 @@ class LandingAnalysisApp(tk.Tk):
             self._param_vars["use_resistance_tp"].set(cfg.use_resistance_tp)
             self._param_vars["breakout_buy"].set(cfg.breakout_buy)
             self._param_vars["trend_ma_filter"].set(cfg.trend_ma_filter)
+            self._param_vars["require_macd"].set(cfg.require_macd)
+            self._param_vars["require_volume_shrink"].set(cfg.require_volume_shrink)
+            self._param_vars["require_candlestick"].set(cfg.require_candlestick)
+            self._param_vars["use_macd_exit"].set(cfg.use_macd_exit)
+            self._param_vars["volume_expand_breakout"].set(cfg.volume_expand_breakout)
+            self._param_vars["signal_confirm_min"].set(cfg.signal_confirm_min)
 
         tickers = TEMPLATE_TICKERS.get(name, PRESET_TICKERS)
         if name == "自訂":
@@ -249,6 +270,12 @@ class LandingAnalysisApp(tk.Tk):
             use_resistance_tp=bool(self._param_vars["use_resistance_tp"].get()),
             breakout_buy=bool(self._param_vars["breakout_buy"].get()),
             trend_ma_filter=bool(self._param_vars["trend_ma_filter"].get()),
+            require_macd=bool(self._param_vars["require_macd"].get()),
+            require_volume_shrink=bool(self._param_vars["require_volume_shrink"].get()),
+            require_candlestick=bool(self._param_vars["require_candlestick"].get()),
+            use_macd_exit=bool(self._param_vars["use_macd_exit"].get()),
+            volume_expand_breakout=bool(self._param_vars["volume_expand_breakout"].get()),
+            signal_confirm_min=int(self._param_vars["signal_confirm_min"].get()),
         )
 
     def _on_ticker_preset(self, _event=None):

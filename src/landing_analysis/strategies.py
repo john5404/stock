@@ -16,6 +16,12 @@ class StrategyConfig:
     use_resistance_tp: bool = True
     breakout_buy: bool = False
     trend_ma_filter: bool = False
+    require_macd: bool = False
+    require_volume_shrink: bool = False
+    require_candlestick: bool = False
+    use_macd_exit: bool = False
+    volume_expand_breakout: bool = False
+    signal_confirm_min: int = 0  # 0 = 啟用的訊號全部通過；N = 至少 N 項通過
 
     def summary(self) -> str:
         tp = "阻力停利" if self.use_resistance_tp else "僅移動停利"
@@ -24,6 +30,18 @@ class StrategyConfig:
             extras.append("突破加碼")
         if self.trend_ma_filter:
             extras.append("MA50過濾")
+        signal_parts = []
+        if self.require_macd:
+            signal_parts.append("MACD")
+        if self.require_volume_shrink:
+            signal_parts.append("量縮")
+        if self.require_candlestick:
+            signal_parts.append("K棒")
+        if signal_parts:
+            need = self.signal_confirm_min or len(signal_parts)
+            extras.append(f"{'/'.join(signal_parts)}≥{need}")
+        if self.use_macd_exit:
+            extras.append("MACD死叉出場")
         extra = " · ".join(extras) if extras else "無"
         return (
             f"停損 -{self.stop_loss_pct*100:.0f}% · RSI<{self.rsi_buy:.0f} · "
@@ -41,6 +59,11 @@ EQUIPMENT_TEMPLATE = StrategyConfig(
     use_resistance_tp=True,
     breakout_buy=False,
     trend_ma_filter=False,
+    require_macd=True,
+    require_volume_shrink=True,
+    require_candlestick=True,
+    use_macd_exit=True,
+    signal_confirm_min=2,
 )
 
 HOT_TEMPLATE = StrategyConfig(
@@ -53,6 +76,12 @@ HOT_TEMPLATE = StrategyConfig(
     use_resistance_tp=False,
     breakout_buy=True,
     trend_ma_filter=True,
+    require_macd=True,
+    require_volume_shrink=True,
+    require_candlestick=True,
+    use_macd_exit=True,
+    volume_expand_breakout=True,
+    signal_confirm_min=2,
 )
 
 CUSTOM_TEMPLATE = StrategyConfig(

@@ -144,6 +144,31 @@ class BacktestEngine:
             trades.append(self._close_position(position, test.iloc[-1], final_price, "回測結束平倉"))
         return trades
 
+    def _signal_filters_ok(self, row: pd.Series, for_breakout: bool = False) -> bool:
+        cfg = self.config
+        if for_breakout:
+            checks = []
+            if cfg.require_macd:
+                checks.append(bool(row.get("MACD_Bull", False)) or bool(row.get("MACD_Golden", False)))
+            if cfg.volume_expand_breakout:
+                checks.append(bool(row.get("Vol_Expand", False)))
+            if not checks:
+                return True
+            need = cfg.signal_confirm_min or len(checks)
+            return sum(checks) >= need
+
+        checks = []
+        if cfg.require_macd:
+            checks.append(bool(row.get("MACD_Bull", False)) or bool(row.get("MACD_Golden", False)))
+        if cfg.require_volume_shrink:
+            checks.append(bool(row.get("Vol_Shrink", False)))
+        if cfg.require_candlestick:
+            checks.append(bool(row.get("Bullish_Candle", False)))
+        if not checks:
+            return True
+        need = cfg.signal_confirm_min or len(checks)
+        return sum(checks) >= need
+
     def _try_support_entry(self, row, supports, resistances, price, low, rsi, ma50):
         zones = sorted(
             [s for s in supports if s.strength >= 1 and s.price <= price * 1.05],
@@ -151,7 +176,12 @@ class BacktestEngine:
         )[:4]
         for zone in zones:
             trend_ok = (not self.config.trend_ma_filter) or (not pd.isna(ma50) and price > ma50)
-            if low <= zone.price * (1 + self.tolerance) and rsi < self.rsi_buy and trend_ok:
+            if (
+                low <= zone.price * (1 + self.tolerance)
+                and rsi < self.rsi_buy
+                and trend_ok
+                and self._signal_filters_ok(row, for_breakout=False)
+            ):
                 targets = [r.price for r in resistances if r.price > price * 1.03]
                 take_profit = min(targets) if targets else price * 1.30
                 return {
@@ -169,6 +199,8 @@ class BacktestEngine:
             return None
         trend_ok = (not self.config.trend_ma_filter) or (not pd.isna(ma50) and price > ma50)
         if not trend_ok or rsi <= 50:
+            return None
+        if not self._signal_filters_ok(row, for_breakout=True):
             return None
         broken = [
             r for r in resistances
@@ -212,6 +244,8 @@ class BacktestEngine:
             reason, exit_price = "停利(阻力)", position["take_profit"]
         elif price <= trail_stop and price > position["entry_price"]:
             reason, exit_price = "移動停利", price
+        elif self.config.use_macd_exit and bool(row.get("MACD_Death", False)):
+            reason, exit_price = "MACD死叉", price
         elif rsi > self.rsi_sell and not self.config.trend_ma_filter:
             reason, exit_price = "RSI超買", price
 
