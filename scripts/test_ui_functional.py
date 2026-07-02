@@ -50,8 +50,9 @@ def test_ui_flow():
   def step_analysis():
     root.run_analysis()
     assert_true(root.analysis is not None, "analysis result")
-    assert_true(len(root.support_tree.get_children()) > 0, "support rows")
-    assert_true(len(root.resist_tree.get_children()) > 0, "resist rows")
+    assert_true(len(root.analysis.supports) > 0, "support levels")
+    assert_true(len(root.analysis.resistances) > 0, "resist levels")
+    assert_true(root.levels_canvas is not None, "scheme C canvas")
     assert_true("落點分析完成" in root.status_var.get(), "analysis status")
 
   def step_backtest_rolling():
@@ -111,10 +112,13 @@ def test_ui_flow():
 
   def step_chart_draw():
     root._draw_price_chart()
+    root._draw_levels_scheme_c()
+    root._draw_empty_levels_chart()
     root._draw_empty_chart()
     root.df = None
     root._draw_price_chart()
     assert_true(root.canvas is not None, "chart canvas")
+    assert_true(root.levels_canvas is not None, "levels canvas")
 
   print("LandingAnalysisApp functional tests")
   run_step("init", step_init)

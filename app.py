@@ -10,6 +10,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.gridspec import GridSpec
 from matplotlib.lines import Line2D
 
 ROOT = Path(__file__).resolve().parent
@@ -25,6 +26,7 @@ from landing_analysis.data_fetcher import (
     ticker_market,
 )
 from landing_analysis.indicators import add_indicators
+from landing_analysis.scheme_c_charts import draw_empty_scheme_c, draw_scheme_c
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
 COLORS = {
@@ -704,11 +706,24 @@ class LandingAnalysisApp(tk.Tk):
         self._on_ticker_search_select(_event)
 
     def _build_levels_tab(self):
-        top = ttk.Frame(self.levels_frame, style="Surface.TFrame", padding=12)
-        top.pack(fill=tk.BOTH, expand=True)
-        cols = ("price", "strength", "distance", "methods")
-        self.support_tree = self._make_tree(top, "支撐落點", cols, side=tk.LEFT, accent=COLORS["success"])
-        self.resist_tree = self._make_tree(top, "阻力落點", cols, side=tk.RIGHT, accent=COLORS["danger"])
+        chart_card = tk.Frame(
+            self.levels_frame,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        chart_card.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+
+        self.levels_fig = plt.figure(figsize=(11, 6.5), dpi=100)
+        self.levels_fig.patch.set_facecolor(COLORS["surface"])
+        grid = GridSpec(2, 2, figure=self.levels_fig, width_ratios=[2.4, 1], height_ratios=[1, 1], wspace=0.28, hspace=0.32)
+        self.ax_price_levels = self.levels_fig.add_subplot(grid[:, 0])
+        self.ax_ladder = self.levels_fig.add_subplot(grid[0, 1])
+        self.ax_volume_profile = self.levels_fig.add_subplot(grid[1, 1])
+
+        self.levels_canvas = FigureCanvasTkAgg(self.levels_fig, master=chart_card)
+        self.levels_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self._draw_empty_levels_chart()
 
     def _build_backtest_tab(self):
         frame = ttk.Frame(self.backtest_frame, style="Surface.TFrame", padding=12)
@@ -791,41 +806,33 @@ class LandingAnalysisApp(tk.Tk):
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self._draw_empty_chart()
 
-    def _make_tree(self, parent, title, cols, side, accent: str):
-        frame = tk.Frame(
-            parent,
-            bg=COLORS["surface"],
-            highlightbackground=COLORS["border"],
-            highlightthickness=1,
+    def _draw_empty_levels_chart(self):
+        draw_empty_scheme_c(
+            self.levels_fig,
+            self.ax_price_levels,
+            self.ax_ladder,
+            self.ax_volume_profile,
+            COLORS,
         )
-        frame.pack(side=side, fill=tk.BOTH, expand=True, padx=4)
+        self.levels_canvas.draw()
 
-        header = tk.Frame(frame, bg=COLORS["surface"])
-        header.pack(fill=tk.X, padx=12, pady=(12, 6))
-        tk.Frame(header, bg=accent, width=3, height=16).pack(side=tk.LEFT, padx=(0, 8))
-        tk.Label(header, text=title, bg=COLORS["surface"], fg=COLORS["text"], font=FONTS["section"]).pack(side=tk.LEFT)
-
-        tree_wrap = tk.Frame(frame, bg=COLORS["surface"])
-        tree_wrap.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 10))
-
-        tree = ttk.Treeview(tree_wrap, columns=cols, show="headings", height=20, style="Custom.Treeview")
-        headers = {"price": "價位", "strength": "強度", "distance": "距現價%", "methods": "方法"}
-        widths = {"price": 90, "strength": 60, "distance": 80, "methods": 280}
-        for col in cols:
-            tree.heading(col, text=headers[col])
-            tree.column(col, width=widths[col], anchor=tk.W if col == "methods" else tk.CENTER)
-        tree.tag_configure("stars_3", background=COLORS["strength_high"], foreground=COLORS["text"])
-        tree.tag_configure("stars_2", background=COLORS["danger_soft"], foreground=COLORS["text"])
-        tree.tag_configure("even", background=COLORS["tree_zebra"])
-        tree.pack(fill=tk.BOTH, expand=True)
-        return tree
-
-    def _level_row_tags(self, level, idx: int) -> tuple[str, ...]:
-        if level.strength >= 3:
-            return ("stars_3",)
-        if level.strength == 2:
-            return ("stars_2",)
-        return ("even",) if idx % 2 else ()
+    def _draw_levels_scheme_c(self):
+        if self.df is None or not self.analysis:
+            self._draw_empty_levels_chart()
+            return
+        draw_scheme_c(
+            self.levels_fig,
+            self.ax_price_levels,
+            self.ax_ladder,
+            self.ax_volume_profile,
+            self.df,
+            self.analysis,
+            ticker=self.ticker,
+            strategy_name=self.strategy_var.get(),
+            colors=COLORS,
+            lookback_days=self.lookback_var.get(),
+        )
+        self.levels_canvas.draw()
 
     def _resolve_ticker(self) -> str:
         manual = self.custom_ticker_var.get().strip()
@@ -913,36 +920,20 @@ class LandingAnalysisApp(tk.Tk):
             self.run_backtest()
 
     def _populate_levels(self):
-        for tree in (self.support_tree, self.resist_tree):
-            for item in tree.get_children():
-                tree.delete(item)
         if not self.analysis:
+            self._draw_empty_levels_chart()
             return
         current = self.analysis.current_price
-        for idx, level in enumerate(self.analysis.supports):
-            dist = (level.price / current - 1) * 100
-            self.support_tree.insert(
-                "",
-                tk.END,
-                values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)),
-                tags=self._level_row_tags(level, idx),
-            )
-        for idx, level in enumerate(self.analysis.resistances):
-            dist = (level.price / current - 1) * 100
-            self.resist_tree.insert(
-                "",
-                tk.END,
-                values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)),
-                tags=self._level_row_tags(level, idx),
-            )
         self.summary_var.set(
             f"模板: {self.strategy_var.get()}\n"
             f"Ticker: {self.ticker}\n"
             f"分析期間: {self.analysis.train_start.date()} ~ {self.analysis.train_end.date()}\n"
             f"現價: {current:,.2f}\n"
+            f"支撐: {len(self.analysis.supports)}  ·  阻力: {len(self.analysis.resistances)}\n"
             f"波段: {self.analysis.swing_low:,.2f} ~ {self.analysis.swing_high:,.2f}\n"
             f"ATR: {self.analysis.atr:,.2f}"
         )
+        self._draw_levels_scheme_c()
 
     def _populate_backtest(self):
         for item in self.trade_tree.get_children():
