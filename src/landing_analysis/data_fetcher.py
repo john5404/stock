@@ -1,7 +1,8 @@
 """Market data fetching."""
 
 import pandas as pd
-import yfinance as yf
+
+from .data_store import DEFAULT_MAX_LOOKBACK, get_stock_data, normalize_df
 
 US_TICKERS: dict[str, str] = {
     "美光 (MU)": "MU",
@@ -69,21 +70,9 @@ def get_market_tickers(market: str) -> dict[str, str]:
     return dict(MARKET_TICKERS.get(market, {}))
 
 
-def normalize_df(raw: pd.DataFrame) -> pd.DataFrame:
-    df = raw.copy()
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df = df.dropna().sort_index()
-    df.columns = [str(c).capitalize() for c in df.columns]
-    required = {"Open", "High", "Low", "Close", "Volume"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
-    return df
-
-
-def fetch_stock_data(ticker: str, period: str = "12mo") -> pd.DataFrame:
-    raw = yf.download(ticker, period=period, interval="1d", progress=False)
-    if raw.empty:
-        raise ValueError(f"No data returned for ticker: {ticker}")
-    return normalize_df(raw)
+def fetch_stock_data(
+    ticker: str,
+    period: str = "12mo",
+    lookback_days: int = DEFAULT_MAX_LOOKBACK,
+) -> pd.DataFrame:
+    return get_stock_data(ticker, period, lookback_days=lookback_days)

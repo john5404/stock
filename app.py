@@ -851,7 +851,11 @@ class LandingAnalysisApp(tk.Tk):
             self.ticker = self._resolve_ticker()
             self._set_status(f"正在載入 {self.ticker} ...", tone="warn")
             self.header_ticker_var.set(f"  {self.ticker}  ")
-            self.df = fetch_stock_data(self.ticker, self.period_var.get())
+            self.df = fetch_stock_data(
+                self.ticker,
+                self.period_var.get(),
+                lookback_days=self.lookback_var.get(),
+            )
             start, end = self.df.index[0].date(), self.df.index[-1].date()
             last = self.df["Close"].iloc[-1]
             self.summary_var.set(
