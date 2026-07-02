@@ -378,10 +378,6 @@ class LandingAnalysisApp(tk.Tk):
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(4, 0))
 
-        # --- Custom params ---
-        self.custom_frame = self._sidebar_card(sidebar_pad, "自訂參數")
-        self._build_custom_params(self.custom_frame)
-
         # --- Ticker ---
         ticker_frame = self._sidebar_card(sidebar_pad, "標的")
 
@@ -396,6 +392,10 @@ class LandingAnalysisApp(tk.Tk):
         self._sidebar_label(ticker_frame, "Ticker").pack(anchor=tk.W)
         self.custom_ticker_var = tk.StringVar(value="AMAT")
         ttk.Entry(ticker_frame, textvariable=self.custom_ticker_var, width=30, style="Dark.TEntry").pack(fill=tk.X, pady=(4, 0))
+
+        # --- Custom params ---
+        self.custom_frame = self._sidebar_card(sidebar_pad, "自訂參數")
+        self._build_custom_params(self.custom_frame)
 
         # --- General settings ---
         general = self._sidebar_card(sidebar_pad, "一般設定")
@@ -793,6 +793,8 @@ class LandingAnalysisApp(tk.Tk):
         except Exception as exc:
             messagebox.showerror("載入失敗", str(exc))
             self._set_status("載入失敗", tone="error")
+            return
+        self.run_analysis()
 
     def run_analysis(self):
         if self.df is None:
@@ -831,7 +833,6 @@ class LandingAnalysisApp(tk.Tk):
     def run_all(self):
         self.load_data()
         if self.df is not None:
-            self.run_analysis()
             self.run_backtest()
 
     def _populate_levels(self):

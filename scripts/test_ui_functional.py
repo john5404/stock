@@ -44,7 +44,8 @@ def test_ui_flow():
     root.load_data()
     assert_true(root.df is not None and len(root.df) > 0, "dataframe loaded")
     assert_true("AAPL" in root.header_ticker_var.get(), "header ticker updated")
-    assert_true("已載入" in root.status_var.get(), "load status")
+    assert_true(root.analysis is not None, "auto analysis after load")
+    assert_true("落點分析完成" in root.status_var.get(), "analysis status after load")
 
   def step_analysis():
     root.run_analysis()
