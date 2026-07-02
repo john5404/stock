@@ -17,7 +17,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from landing_analysis.analyzer import LandingAnalyzer
 from landing_analysis.backtest import BacktestEngine
-from landing_analysis.data_fetcher import PRESET_TICKERS, fetch_stock_data
+from landing_analysis.data_fetcher import (
+    MARKET_TICKERS,
+    fetch_stock_data,
+    get_market_tickers,
+    normalize_ticker_input,
+    ticker_market,
+)
 from landing_analysis.indicators import add_indicators
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
@@ -76,6 +82,8 @@ class LandingAnalysisApp(tk.Tk):
 
         self._param_vars: dict[str, tk.Variable] = {}
         self._custom_widgets: list[tk.Widget] = []
+        self._ticker_catalog: dict[str, str] = {}
+        self._ticker_search_values: list[str] = []
 
         self._setup_theme()
         self._build_ui()
@@ -381,17 +389,35 @@ class LandingAnalysisApp(tk.Tk):
         # --- Ticker ---
         ticker_frame = self._sidebar_card(sidebar_pad, "標的")
 
-        self._sidebar_label(ticker_frame, "快速選股").pack(anchor=tk.W)
-        self.ticker_preset_var = tk.StringVar()
-        self.ticker_preset_combo = ttk.Combobox(
-            ticker_frame, textvariable=self.ticker_preset_var, width=28, style="Dark.TCombobox"
+        self._sidebar_label(ticker_frame, "市場").pack(anchor=tk.W)
+        self.market_var = tk.StringVar(value="美股")
+        market_combo = ttk.Combobox(
+            ticker_frame,
+            textvariable=self.market_var,
+            values=list(MARKET_TICKERS.keys()),
+            state="readonly",
+            width=28,
+            style="Dark.TCombobox",
         )
-        self.ticker_preset_combo.pack(fill=tk.X, pady=(4, 8))
-        self.ticker_preset_combo.bind("<<ComboboxSelected>>", self._on_ticker_preset)
+        market_combo.pack(fill=tk.X, pady=(4, 8))
+        market_combo.bind("<<ComboboxSelected>>", self._on_market_change)
 
-        self._sidebar_label(ticker_frame, "Ticker").pack(anchor=tk.W)
+        self._sidebar_label(ticker_frame, "搜尋 / 選股").pack(anchor=tk.W)
+        self.ticker_search_var = tk.StringVar()
+        self.ticker_search_combo = ttk.Combobox(
+            ticker_frame,
+            textvariable=self.ticker_search_var,
+            width=28,
+            style="Dark.TCombobox",
+        )
+        self.ticker_search_combo.pack(fill=tk.X, pady=(4, 8))
+        self.ticker_search_combo.bind("<<ComboboxSelected>>", self._on_ticker_search_select)
+        self.ticker_search_combo.bind("<KeyRelease>", self._on_ticker_search_key)
+
+        self._sidebar_label(ticker_frame, "自行輸入 Ticker").pack(anchor=tk.W)
         self.custom_ticker_var = tk.StringVar(value="AMAT")
         ttk.Entry(ticker_frame, textvariable=self.custom_ticker_var, width=30, style="Dark.TEntry").pack(fill=tk.X, pady=(4, 0))
+        self._sidebar_label(ticker_frame, "台股輸入 2330 會自動轉為 2330.TW", muted=True).pack(anchor=tk.W, pady=(4, 0))
 
         # --- Custom params ---
         self.custom_frame = self._sidebar_card(sidebar_pad, "自訂參數")
@@ -580,19 +606,9 @@ class LandingAnalysisApp(tk.Tk):
             self._param_vars["volume_expand_breakout"].set(cfg.volume_expand_breakout)
             self._param_vars["signal_confirm_min"].set(cfg.signal_confirm_min)
 
-        tickers = TEMPLATE_TICKERS.get(name, PRESET_TICKERS)
-        if name == "自訂":
-            all_tickers = {}
-            for group in TEMPLATE_TICKERS.values():
-                all_tickers.update(group)
-            all_tickers.update(PRESET_TICKERS)
-            tickers = all_tickers
+        tickers = self._template_tickers_for_market(name)
 
-        self.ticker_preset_combo["values"] = list(tickers.keys())
-        if tickers:
-            first = next(iter(tickers.keys()))
-            self.ticker_preset_var.set(first)
-            self.custom_ticker_var.set(tickers[first])
+        self._refresh_ticker_options(tickers)
 
         self.engine = BacktestEngine(self._build_config_from_ui())
 
@@ -623,18 +639,69 @@ class LandingAnalysisApp(tk.Tk):
             signal_confirm_min=int(self._param_vars["signal_confirm_min"].get()),
         )
 
-    def _on_ticker_preset(self, _event=None):
-        name = self.strategy_var.get()
-        tickers = TEMPLATE_TICKERS.get(name, {})
-        if name == "自訂":
-            all_tickers = {}
+    def _template_tickers_for_market(self, strategy_name: str) -> dict[str, str]:
+        market = self.market_var.get()
+        catalog = dict(get_market_tickers(market))
+
+        if strategy_name == "自訂":
+            preferred: dict[str, str] = {}
             for group in TEMPLATE_TICKERS.values():
-                all_tickers.update(group)
-            all_tickers.update(PRESET_TICKERS)
-            tickers = all_tickers
-        selected = self.ticker_preset_var.get()
-        if selected in tickers:
-            self.custom_ticker_var.set(tickers[selected])
+                for label, symbol in group.items():
+                    if ticker_market(symbol) == market:
+                        preferred[label] = symbol
+            return {**preferred, **catalog}
+
+        for label, symbol in TEMPLATE_TICKERS.get(strategy_name, {}).items():
+            if ticker_market(symbol) == market:
+                catalog[label] = symbol
+        return catalog
+
+    def _refresh_ticker_options(self, catalog: dict[str, str] | None = None):
+        if catalog is None:
+            catalog = self._template_tickers_for_market(self.strategy_var.get())
+        self._ticker_catalog = catalog
+        self._ticker_search_values = list(catalog.keys())
+        self.ticker_search_combo["values"] = self._ticker_search_values
+        if catalog:
+            first_label = next(iter(catalog))
+            self.ticker_search_var.set(first_label)
+            self.custom_ticker_var.set(catalog[first_label])
+        else:
+            self.ticker_search_var.set("")
+            self.custom_ticker_var.set("")
+
+    def _filter_ticker_search_values(self, query: str) -> list[str]:
+        q = query.strip().lower()
+        if not q:
+            return list(self._ticker_search_values)
+        return [
+            label
+            for label in self._ticker_search_values
+            if q in label.lower() or q in self._ticker_catalog.get(label, "").lower()
+        ]
+
+    def _on_market_change(self, _event=None):
+        self._refresh_ticker_options(self._template_tickers_for_market(self.strategy_var.get()))
+
+    def _on_ticker_search_key(self, _event=None):
+        if _event is not None and _event.keysym in ("Up", "Down", "Return", "Tab"):
+            return
+        filtered = self._filter_ticker_search_values(self.ticker_search_var.get())
+        self.ticker_search_combo["values"] = filtered
+
+    def _on_ticker_search_select(self, _event=None):
+        selected = self.ticker_search_var.get()
+        if selected in self._ticker_catalog:
+            self.custom_ticker_var.set(self._ticker_catalog[selected])
+            return
+        for label, symbol in self._ticker_catalog.items():
+            if selected.lower() in label.lower() or selected.upper() == symbol.upper():
+                self.ticker_search_var.set(label)
+                self.custom_ticker_var.set(symbol)
+                return
+
+    def _on_ticker_preset(self, _event=None):
+        self._on_ticker_search_select(_event)
 
     def _build_levels_tab(self):
         top = ttk.Frame(self.levels_frame, style="Surface.TFrame", padding=12)
@@ -761,7 +828,13 @@ class LandingAnalysisApp(tk.Tk):
         return ("even",) if idx % 2 else ()
 
     def _resolve_ticker(self) -> str:
-        return self.custom_ticker_var.get().strip().upper()
+        manual = self.custom_ticker_var.get().strip()
+        if manual:
+            return normalize_ticker_input(manual, self.market_var.get())
+        selected = self.ticker_search_var.get().strip()
+        if selected in self._ticker_catalog:
+            return self._ticker_catalog[selected]
+        return normalize_ticker_input(selected, self.market_var.get())
 
     def _set_status(self, text: str, *, tone: str = "info"):
         color = {

@@ -94,11 +94,20 @@ def test_ui_flow():
   def step_ticker_preset():
     root.strategy_var.set("熱門股")
     root._apply_strategy_template("熱門股")
-    values = root.ticker_preset_combo["values"]
-    assert_true(len(values) > 0, "preset tickers")
-    root.ticker_preset_var.set(values[0])
-    root._on_ticker_preset()
+    assert_true(len(root._ticker_search_values) > 0, "preset tickers")
+    root.ticker_search_var.set(root._ticker_search_values[0])
+    root._on_ticker_search_select()
     assert_true(root.custom_ticker_var.get().strip(), "preset sets ticker")
+
+  def step_tw_market_search():
+    root.market_var.set("台股")
+    root._on_market_change()
+    assert_true(any(".TW" in sym or ".TWO" in sym for sym in root._ticker_catalog.values()), "tw catalog")
+    root.custom_ticker_var.set("2330")
+    assert_true(root._resolve_ticker() == "2330.TW", "tw ticker normalize")
+    root.ticker_search_var.set("台積")
+    filtered = root._filter_ticker_search_values("台積")
+    assert_true(any("台積電" in label for label in filtered), "tw search filter")
 
   def step_chart_draw():
     root._draw_price_chart()
@@ -117,6 +126,7 @@ def test_ui_flow():
   run_step("strategy_templates", step_strategy_templates)
   run_step("custom_params", step_custom_params)
   run_step("ticker_preset", step_ticker_preset)
+  run_step("tw_market_search", step_tw_market_search)
   run_step("chart_draw", step_chart_draw)
 
   root.destroy()
