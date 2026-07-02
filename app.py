@@ -39,6 +39,7 @@ COLORS = {
     "success_soft": "#dcfce7",
     "danger": "#dc2626",
     "danger_soft": "#fee2e2",
+    "warning": "#d97706",
     "chart_bg": "#fafbfc",
     "tree_header": "#f8fafc",
     "tree_zebra": "#f1f5f9",
