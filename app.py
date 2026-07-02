@@ -39,6 +39,7 @@ COLORS = {
     "success_soft": "#dcfce7",
     "danger": "#dc2626",
     "danger_soft": "#fee2e2",
+    "strength_high": "#f87171",
     "warning": "#d97706",
     "chart_bg": "#fafbfc",
     "tree_header": "#f8fafc",
@@ -746,9 +747,18 @@ class LandingAnalysisApp(tk.Tk):
         for col in cols:
             tree.heading(col, text=headers[col])
             tree.column(col, width=widths[col], anchor=tk.W if col == "methods" else tk.CENTER)
+        tree.tag_configure("stars_3", background=COLORS["strength_high"], foreground=COLORS["text"])
+        tree.tag_configure("stars_2", background=COLORS["danger_soft"], foreground=COLORS["text"])
         tree.tag_configure("even", background=COLORS["tree_zebra"])
         tree.pack(fill=tk.BOTH, expand=True)
         return tree
+
+    def _level_row_tags(self, level, idx: int) -> tuple[str, ...]:
+        if level.strength >= 3:
+            return ("stars_3",)
+        if level.strength == 2:
+            return ("stars_2",)
+        return ("even",) if idx % 2 else ()
 
     def _resolve_ticker(self) -> str:
         return self.custom_ticker_var.get().strip().upper()
@@ -833,21 +843,19 @@ class LandingAnalysisApp(tk.Tk):
         current = self.analysis.current_price
         for idx, level in enumerate(self.analysis.supports):
             dist = (level.price / current - 1) * 100
-            tag = ("even",) if idx % 2 else ()
             self.support_tree.insert(
                 "",
                 tk.END,
                 values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)),
-                tags=tag,
+                tags=self._level_row_tags(level, idx),
             )
         for idx, level in enumerate(self.analysis.resistances):
             dist = (level.price / current - 1) * 100
-            tag = ("even",) if idx % 2 else ()
             self.resist_tree.insert(
                 "",
                 tk.END,
                 values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)),
-                tags=tag,
+                tags=self._level_row_tags(level, idx),
             )
         self.summary_var.set(
             f"模板: {self.strategy_var.get()}\n"
