@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from landing_analysis.analyzer import LandingAnalyzer
 from landing_analysis.backtest import BacktestEngine
 from landing_analysis.data_fetcher import (
-    MARKET_TICKERS,
+    detect_market_from_input,
     fetch_stock_data,
     get_market_tickers,
     normalize_ticker_input,
@@ -410,19 +410,6 @@ class LandingAnalysisApp(tk.Tk):
         # --- Ticker ---
         ticker_frame = self._sidebar_card(sidebar_pad, "標的")
 
-        self._sidebar_label(ticker_frame, "市場").pack(anchor=tk.W)
-        self.market_var = tk.StringVar(value="美股")
-        market_combo = ttk.Combobox(
-            ticker_frame,
-            textvariable=self.market_var,
-            values=list(MARKET_TICKERS.keys()),
-            state="readonly",
-            width=28,
-            style="Dark.TCombobox",
-        )
-        market_combo.pack(fill=tk.X, pady=(4, 8))
-        market_combo.bind("<<ComboboxSelected>>", self._on_market_change)
-
         self._sidebar_label(ticker_frame, "搜尋 / 選股").pack(anchor=tk.W)
         self.ticker_search_var = tk.StringVar()
         self.ticker_search_combo = ttk.Combobox(
@@ -438,7 +425,11 @@ class LandingAnalysisApp(tk.Tk):
         self._sidebar_label(ticker_frame, "自行輸入 Ticker").pack(anchor=tk.W)
         self.custom_ticker_var = tk.StringVar(value="AMAT")
         ttk.Entry(ticker_frame, textvariable=self.custom_ticker_var, width=30, style="Dark.TEntry").pack(fill=tk.X, pady=(4, 0))
-        self._sidebar_label(ticker_frame, "台股輸入 2330 會自動轉為 2330.TW", muted=True).pack(anchor=tk.W, pady=(4, 0))
+        self._sidebar_label(
+            ticker_frame,
+            "中文或數字為台股，英文為美股（自動判定）",
+            muted=True,
+        ).pack(anchor=tk.W, pady=(4, 0))
 
         # --- Custom params ---
         self.custom_frame = self._sidebar_card(sidebar_pad, "自訂參數")
@@ -627,7 +618,7 @@ class LandingAnalysisApp(tk.Tk):
             self._param_vars["volume_expand_breakout"].set(cfg.volume_expand_breakout)
             self._param_vars["signal_confirm_min"].set(cfg.signal_confirm_min)
 
-        tickers = self._template_tickers_for_market(name)
+        tickers = self._catalog_for_query(self.ticker_search_var.get())
 
         self._refresh_ticker_options(tickers)
 
@@ -660,8 +651,11 @@ class LandingAnalysisApp(tk.Tk):
             signal_confirm_min=int(self._param_vars["signal_confirm_min"].get()),
         )
 
-    def _template_tickers_for_market(self, strategy_name: str) -> dict[str, str]:
-        market = self.market_var.get()
+    def _catalog_for_query(self, query: str) -> dict[str, str]:
+        market = detect_market_from_input(query)
+        return self._template_tickers(self.strategy_var.get(), market)
+
+    def _template_tickers(self, strategy_name: str, market: str) -> dict[str, str]:
         catalog = dict(get_market_tickers(market))
 
         if strategy_name == "自訂":
@@ -679,7 +673,7 @@ class LandingAnalysisApp(tk.Tk):
 
     def _refresh_ticker_options(self, catalog: dict[str, str] | None = None):
         if catalog is None:
-            catalog = self._template_tickers_for_market(self.strategy_var.get())
+            catalog = self._catalog_for_query(self.ticker_search_var.get())
         self._ticker_catalog = catalog
         self._ticker_search_values = list(catalog.keys())
         self.ticker_search_combo["values"] = self._ticker_search_values
@@ -701,13 +695,14 @@ class LandingAnalysisApp(tk.Tk):
             if q in label.lower() or q in self._ticker_catalog.get(label, "").lower()
         ]
 
-    def _on_market_change(self, _event=None):
-        self._refresh_ticker_options(self._template_tickers_for_market(self.strategy_var.get()))
-
     def _on_ticker_search_key(self, _event=None):
         if _event is not None and _event.keysym in ("Up", "Down", "Return", "Tab"):
             return
-        filtered = self._filter_ticker_search_values(self.ticker_search_var.get())
+        query = self.ticker_search_var.get()
+        catalog = self._catalog_for_query(query)
+        self._ticker_catalog = catalog
+        self._ticker_search_values = list(catalog.keys())
+        filtered = self._filter_ticker_search_values(query)
         self.ticker_search_combo["values"] = filtered
 
     def _on_ticker_search_select(self, _event=None):
@@ -961,11 +956,11 @@ class LandingAnalysisApp(tk.Tk):
     def _resolve_ticker(self) -> str:
         manual = self.custom_ticker_var.get().strip()
         if manual:
-            return normalize_ticker_input(manual, self.market_var.get())
+            return normalize_ticker_input(manual)
         selected = self.ticker_search_var.get().strip()
         if selected in self._ticker_catalog:
             return self._ticker_catalog[selected]
-        return normalize_ticker_input(selected, self.market_var.get())
+        return normalize_ticker_input(selected)
 
     def _set_status(self, text: str, *, tone: str = "info"):
         color = {

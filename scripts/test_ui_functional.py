@@ -102,14 +102,18 @@ def test_ui_flow():
     assert_true(root.custom_ticker_var.get().strip(), "preset sets ticker")
 
   def step_tw_market_search():
-    root.market_var.set("台股")
-    root._on_market_change()
-    assert_true(any(".TW" in sym or ".TWO" in sym for sym in root._ticker_catalog.values()), "tw catalog")
-    root.custom_ticker_var.set("2330")
-    assert_true(root._resolve_ticker() == "2330.TW", "tw ticker normalize")
     root.ticker_search_var.set("台積")
+    root._on_ticker_search_key()
+    assert_true(any(".TW" in sym or ".TWO" in sym for sym in root._ticker_catalog.values()), "tw catalog on chinese query")
     filtered = root._filter_ticker_search_values("台積")
     assert_true(any("台積電" in label for label in filtered), "tw search filter")
+    root.custom_ticker_var.set("2330")
+    assert_true(root._resolve_ticker() == "2330.TW", "tw ticker normalize")
+    root.ticker_search_var.set("AAPL")
+    root._on_ticker_search_key()
+    assert_true(any(sym == "AAPL" for sym in root._ticker_catalog.values()), "us catalog on english query")
+    root.custom_ticker_var.set("AAPL")
+    assert_true(root._resolve_ticker() == "AAPL", "us ticker normalize")
 
   def step_chart_draw():
     root._draw_price_chart()

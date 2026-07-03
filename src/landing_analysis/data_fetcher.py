@@ -1,8 +1,12 @@
 """Market data fetching."""
 
+import re
+
 import pandas as pd
 
 from .data_store import DEFAULT_MAX_LOOKBACK, get_stock_data, normalize_df
+
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 US_TICKERS: dict[str, str] = {
     "美光 (MU)": "MU",
@@ -48,6 +52,20 @@ MARKET_TICKERS: dict[str, dict[str, str]] = {
 PRESET_TICKERS = {**US_TICKERS, **TW_TICKERS}
 
 
+def detect_market_from_input(raw: str) -> str:
+    text = raw.strip()
+    if not text:
+        return "美股"
+    upper = text.upper()
+    if upper.endswith(".TW") or upper.endswith(".TWO"):
+        return "台股"
+    if _CJK_RE.search(text):
+        return "台股"
+    if text.isdigit():
+        return "台股"
+    return "美股"
+
+
 def ticker_market(symbol: str) -> str:
     sym = symbol.upper()
     if sym.endswith(".TW") or sym.endswith(".TWO"):
@@ -55,13 +73,14 @@ def ticker_market(symbol: str) -> str:
     return "美股"
 
 
-def normalize_ticker_input(raw: str, market: str) -> str:
+def normalize_ticker_input(raw: str, market: str | None = None) -> str:
     text = raw.strip().upper()
     if not text:
         return text
     if "." in text:
         return text
-    if market == "台股" and text.isdigit():
+    mkt = market or detect_market_from_input(raw)
+    if mkt == "台股" and text.isdigit():
         return f"{text}.TW"
     return text
 
