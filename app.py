@@ -30,31 +30,31 @@ from landing_analysis.scheme_c_charts import draw_empty_scheme_c, draw_scheme_c
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
 COLORS = {
-    # Trading-dashboard dark palette (TradingView / CustomTkinter inspired)
-    "bg": "#0b0f14",
-    "surface": "#131a24",
-    "surface_elevated": "#1a2332",
-    "sidebar": "#0f1419",
-    "sidebar_elevated": "#161d28",
-    "sidebar_border": "#2a3544",
-    "accent": "#3d8bfd",
-    "accent_dark": "#2f6fd6",
-    "accent_soft": "#1a2f4d",
-    "text": "#e6edf3",
-    "text_inverse": "#e6edf3",
-    "muted": "#8b949e",
-    "muted_light": "#6e7681",
-    "border": "#2d3b4f",
-    "success": "#26a69a",
-    "success_soft": "#152a28",
-    "danger": "#ef5350",
-    "danger_soft": "#2a1818",
-    "strength_high": "#c62828",
-    "warning": "#ffa726",
-    "chart_bg": "#0d1117",
-    "tree_header": "#161b22",
-    "tree_zebra": "#111820",
-    "grid": "#21262d",
+    # Low-contrast OLED-style dark palette
+    "bg": "#030405",
+    "surface": "#080a0d",
+    "surface_elevated": "#0d1014",
+    "sidebar": "#030405",
+    "sidebar_elevated": "#0a0c10",
+    "sidebar_border": "#151a22",
+    "accent": "#4a7fa8",
+    "accent_dark": "#3d6d92",
+    "accent_soft": "#101820",
+    "text": "#9aa3ad",
+    "text_inverse": "#9aa3ad",
+    "muted": "#5f6770",
+    "muted_light": "#4a5159",
+    "border": "#171c24",
+    "success": "#3d8f7a",
+    "success_soft": "#0d1412",
+    "danger": "#b86a62",
+    "danger_soft": "#140d0c",
+    "strength_high": "#8f4a4a",
+    "warning": "#b8894a",
+    "chart_bg": "#050608",
+    "tree_header": "#0a0d11",
+    "tree_zebra": "#07090c",
+    "grid": "#141820",
 }
 
 FONTS = {
@@ -224,7 +224,7 @@ class LandingAnalysisApp(tk.Tk):
                 "xtick.color": COLORS["muted"],
                 "ytick.color": COLORS["muted"],
                 "grid.color": COLORS["grid"],
-                "grid.alpha": 0.45,
+                "grid.alpha": 0.22,
                 "text.color": COLORS["text"],
                 "font.sans-serif": ["Microsoft JhengHei", "Microsoft YaHei", "Segoe UI", "DejaVu Sans"],
                 "axes.unicode_minus": False,
@@ -270,7 +270,7 @@ class LandingAnalysisApp(tk.Tk):
 
     def _action_button(self, parent, text: str, command, *, primary: bool = False) -> tk.Button:
         if primary:
-            bg, fg, active = COLORS["accent"], "#ffffff", COLORS["accent_dark"]
+            bg, fg, active = COLORS["accent"], "#b8c4d0", COLORS["accent_dark"]
             border = COLORS["accent"]
         else:
             bg, fg, active = COLORS["sidebar_elevated"], COLORS["text_inverse"], COLORS["sidebar_border"]
@@ -996,7 +996,7 @@ class LandingAnalysisApp(tk.Tk):
             color=COLORS["muted"],
             fontsize=10,
         )
-        self.ax.grid(True, alpha=0.35)
+        self.ax.grid(True, alpha=0.2)
         for spine in self.ax.spines.values():
             spine.set_color(COLORS["border"])
         self.canvas.draw()
@@ -1011,14 +1011,14 @@ class LandingAnalysisApp(tk.Tk):
         dates = plot_df.index
         self.ax.plot(dates, plot_df["Close"], color=COLORS["accent_dark"], linewidth=2.2, label="Close", zorder=3)
         if plot_df["MA20"].notna().any():
-            self.ax.plot(dates, plot_df["MA20"], color="#f59e0b", linewidth=1.2, alpha=0.85, label="MA20", zorder=2)
+            self.ax.plot(dates, plot_df["MA20"], color="#9a7a45", linewidth=1.2, alpha=0.7, label="MA20", zorder=2)
         if plot_df["MA50"].notna().any():
-            self.ax.plot(dates, plot_df["MA50"], color="#10b981", linewidth=1.2, alpha=0.85, label="MA50", zorder=2)
+            self.ax.plot(dates, plot_df["MA50"], color="#4a8f6e", linewidth=1.2, alpha=0.7, label="MA50", zorder=2)
         if self.analysis:
             for level in self.analysis.supports:
-                self.ax.axhline(level.price, color=COLORS["success"], linestyle="--", alpha=0.4, linewidth=1, zorder=1)
+                self.ax.axhline(level.price, color=COLORS["success"], linestyle="--", alpha=0.28, linewidth=1, zorder=1)
             for level in self.analysis.resistances:
-                self.ax.axhline(level.price, color=COLORS["danger"], linestyle="--", alpha=0.4, linewidth=1, zorder=1)
+                self.ax.axhline(level.price, color=COLORS["danger"], linestyle="--", alpha=0.28, linewidth=1, zorder=1)
         if self.backtest_result and self.backtest_result.trades:
             for trade in self.backtest_result.trades:
                 self.ax.scatter(
@@ -1049,15 +1049,15 @@ class LandingAnalysisApp(tk.Tk):
                 )
         legend_items = [
             Line2D([0], [0], color=COLORS["accent_dark"], linewidth=2.2, label="Close"),
-            Line2D([0], [0], color="#f59e0b", linewidth=1.2, label="MA20"),
-            Line2D([0], [0], color="#10b981", linewidth=1.2, label="MA50"),
+            Line2D([0], [0], color="#9a7a45", linewidth=1.2, label="MA20"),
+            Line2D([0], [0], color="#4a8f6e", linewidth=1.2, label="MA50"),
             Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["success"], markersize=8, label="Buy"),
             Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["danger"], markersize=8, label="Sell"),
         ]
         self.ax.legend(handles=legend_items, loc="upper left", frameon=True, fancybox=True, framealpha=0.95,
                        facecolor=COLORS["surface"], edgecolor=COLORS["border"], labelcolor=COLORS["text"])
         self.ax.set_title(f"{self.ticker}  ·  {self.strategy_var.get()}", color=COLORS["text"], pad=12)
-        self.ax.grid(True, alpha=0.35)
+        self.ax.grid(True, alpha=0.2)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
         for spine in self.ax.spines.values():
             spine.set_color(COLORS["border"])

@@ -19,18 +19,18 @@ from landing_analysis.scheme_c_charts import draw_empty_scheme_c, draw_scheme_c,
 
 
 COLORS = {
-    "surface": "#131a24",
-    "surface_elevated": "#1a2332",
-    "chart_bg": "#0d1117",
-    "border": "#2d3b4f",
-    "grid": "#21262d",
-    "text": "#e6edf3",
-    "muted": "#8b949e",
-    "accent": "#3d8bfd",
-    "accent_dark": "#2f6fd6",
-    "success": "#26a69a",
-    "danger": "#ef5350",
-    "warning": "#ffa726",
+    "surface": "#080a0d",
+    "surface_elevated": "#0d1014",
+    "chart_bg": "#050608",
+    "border": "#171c24",
+    "grid": "#141820",
+    "text": "#9aa3ad",
+    "muted": "#5f6770",
+    "accent": "#4a7fa8",
+    "accent_dark": "#3d6d92",
+    "success": "#3d8f7a",
+    "danger": "#b86a62",
+    "warning": "#b8894a",
 }
 
 

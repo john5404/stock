@@ -40,7 +40,7 @@ def _price_band(levels: list[LevelCluster], current: float, padding: float = 0.0
 
 def _style_axis(ax, colors: dict):
     ax.set_facecolor(colors["chart_bg"])
-    ax.grid(True, alpha=0.3, color=colors["border"])
+    ax.grid(True, alpha=0.18, color=colors["border"])
     for spine in ax.spines.values():
         spine.set_color(colors["border"])
     ax.tick_params(colors=colors["muted"], labelsize=8)
@@ -92,14 +92,14 @@ def draw_scheme_c(
     dates = plot_df.index
     ax_price.plot(dates, plot_df["Close"], color=colors["accent_dark"], linewidth=2.0, label="Close", zorder=4)
     if plot_df["MA20"].notna().any():
-        ax_price.plot(dates, plot_df["MA20"], color="#f59e0b", linewidth=1.1, alpha=0.85, label="MA20", zorder=3)
+        ax_price.plot(dates, plot_df["MA20"], color="#9a7a45", linewidth=1.1, alpha=0.7, label="MA20", zorder=3)
 
     for level in analysis.supports:
         ax_price.axhline(
             level.price,
             color=colors["success"],
             linestyle="--",
-            alpha=0.55,
+            alpha=0.45,
             linewidth=_line_width(level.strength),
             zorder=2,
         )
@@ -117,7 +117,7 @@ def draw_scheme_c(
             level.price,
             color=colors["danger"],
             linestyle="--",
-            alpha=0.55,
+            alpha=0.45,
             linewidth=_line_width(level.strength),
             zorder=2,
         )
@@ -142,7 +142,7 @@ def draw_scheme_c(
     ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
     legend_items = [
         Line2D([0], [0], color=colors["accent_dark"], linewidth=2, label="Close"),
-        Line2D([0], [0], color="#f59e0b", linewidth=1.2, label="MA20"),
+        Line2D([0], [0], color="#9a7a45", linewidth=1.2, label="MA20"),
         Line2D([0], [0], color=colors["success"], linestyle="--", linewidth=1.5, label="支撐"),
         Line2D([0], [0], color=colors["danger"], linestyle="--", linewidth=1.5, label="阻力"),
     ]
@@ -163,7 +163,7 @@ def draw_scheme_c(
             height=bar_h,
             left=-width,
             color=colors["success"],
-            alpha=0.75 if level.strength >= 3 else 0.55,
+            alpha=0.45 if level.strength >= 3 else 0.35,
             edgecolor=colors["border"],
             linewidth=0.4,
         )
@@ -184,7 +184,7 @@ def draw_scheme_c(
             height=bar_h,
             left=0,
             color=colors["danger"],
-            alpha=0.75 if level.strength >= 3 else 0.55,
+            alpha=0.45 if level.strength >= 3 else 0.35,
             edgecolor=colors["border"],
             linewidth=0.4,
         )
@@ -223,7 +223,7 @@ def draw_scheme_c(
         bar_colors = [colors["accent"]] * len(vp_centers)
         poc_idx = int(np.argmax(vp_profile))
         bar_colors[poc_idx] = colors["accent_dark"]
-        ax_vp.barh(vp_centers, norm, height=bar_h * 1.1, color=bar_colors, alpha=0.75, edgecolor="none")
+        ax_vp.barh(vp_centers, norm, height=bar_h * 1.1, color=bar_colors, alpha=0.55, edgecolor="none")
         ax_vp.axhline(vp_centers[poc_idx], color=colors["accent_dark"], linestyle="-", linewidth=1.0, alpha=0.8)
         ax_vp.text(
             0.98,
