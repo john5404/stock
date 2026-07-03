@@ -37,10 +37,12 @@ def test_ui_flow():
     assert_true(root.status_var.get() == "就緒", "initial status")
     assert_true(root.header_ticker_var.get() == "尚未載入", "initial header ticker")
     assert_true(len(root.notebook.tabs()) == 3, "notebook tabs")
+    assert_true(not root.custom_params_section.winfo_ismapped(), "custom params hidden by default")
 
   def step_load_data():
+    root.ticker_search_var.set("AAPL")
     root.custom_ticker_var.set("AAPL")
-    root.period_var.set("6mo")
+    root.period_var.set(app.PERIOD_LABELS["6mo"])
     root.load_data()
     assert_true(root.df is not None and len(root.df) > 0, "dataframe loaded")
     assert_true("AAPL" in root.header_ticker_var.get(), "header ticker updated")
@@ -57,18 +59,19 @@ def test_ui_flow():
     assert_true("落點分析完成" in root.status_var.get(), "analysis status")
 
   def step_backtest_rolling():
-    root.backtest_mode_var.set("rolling")
+    root.backtest_mode_var.set(app.BACKTEST_MODE_LABELS["rolling"])
     root.run_backtest()
     assert_true(root.backtest_result is not None, "backtest result")
     assert_true(len(root.trade_tree.get_children()) >= 0, "trade tree accessible")
     assert_true("回測完成" in root.status_var.get(), "backtest status")
 
   def step_backtest_fixed():
-    root.backtest_mode_var.set("fixed")
+    root.backtest_mode_var.set(app.BACKTEST_MODE_LABELS["fixed"])
     root.run_backtest()
     assert_true(root.backtest_result.mode == "fixed", "fixed mode result")
 
   def step_run_all():
+    root.ticker_search_var.set("MU")
     root.custom_ticker_var.set("MU")
     root.run_all()
     assert_true(root.df is not None, "run_all loaded data")
@@ -104,9 +107,11 @@ def test_ui_flow():
   def step_tw_market_search():
     root.ticker_search_var.set("台積")
     root._on_ticker_search_key()
+    assert_true(root.market_badge_var.get() == "台股", "market badge tw")
     assert_true(any(".TW" in sym or ".TWO" in sym for sym in root._ticker_catalog.values()), "tw catalog on chinese query")
     filtered = root._filter_ticker_search_values("台積")
     assert_true(any("台積電" in label for label in filtered), "tw search filter")
+    root.ticker_search_var.set("2330")
     root.custom_ticker_var.set("2330")
     assert_true(root._resolve_ticker() == "2330.TW", "tw ticker normalize")
     root.ticker_search_var.set("AAPL")

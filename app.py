@@ -72,6 +72,20 @@ FONTS = {
     "kpi": ("Segoe UI", 12, "bold"),
 }
 
+PERIOD_LABELS: dict[str, str] = {
+    "6mo": "6 個月",
+    "12mo": "12 個月",
+    "2y": "2 年",
+    "5y": "5 年",
+}
+PERIOD_CODES: dict[str, str] = {label: code for code, label in PERIOD_LABELS.items()}
+
+BACKTEST_MODE_LABELS: dict[str, str] = {
+    "rolling": "滾動視窗",
+    "fixed": "固定前 N 日",
+}
+BACKTEST_MODE_CODES: dict[str, str] = {label: code for code, label in BACKTEST_MODE_LABELS.items()}
+
 
 class LandingAnalysisApp(tk.Tk):
     def __init__(self):
@@ -97,9 +111,12 @@ class LandingAnalysisApp(tk.Tk):
         self._levels_default_xlim: tuple[float, float] | None = None
         self._levels_default_ylim: tuple[float, float] | None = None
         self._price_pan_ref: tuple[float, float, tuple[float, float], tuple[float, float]] | None = None
+        self._action_buttons: list[tk.Button] = []
+        self._busy = False
 
         self._setup_theme()
         self._build_ui()
+        self._bind_shortcuts()
         self._apply_strategy_template("設備股")
 
     def _setup_theme(self):
@@ -276,6 +293,31 @@ class LandingAnalysisApp(tk.Tk):
         body.pack(fill=tk.X, padx=12, pady=(0, 12))
         return body
 
+    def _sidebar_card_section(self, parent, title: str) -> tuple[tk.Frame, tk.Frame]:
+        outer = tk.Frame(parent, bg=COLORS["sidebar"], highlightthickness=0)
+        outer.pack(fill=tk.X, pady=(0, 10))
+
+        card = tk.Frame(
+            outer,
+            bg=COLORS["sidebar_elevated"],
+            highlightbackground=COLORS["sidebar_border"],
+            highlightthickness=1,
+        )
+        card.pack(fill=tk.X, padx=2)
+
+        tk.Label(
+            card,
+            text=title,
+            bg=COLORS["sidebar_elevated"],
+            fg=COLORS["text_inverse"],
+            font=FONTS["section"],
+            anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(10, 6))
+
+        body = tk.Frame(card, bg=COLORS["sidebar_elevated"])
+        body.pack(fill=tk.X, padx=12, pady=(0, 12))
+        return outer, body
+
     def _action_button(self, parent, text: str, command, *, primary: bool = False) -> tk.Button:
         if primary:
             bg, fg, active = COLORS["accent"], "#b8c4d0", COLORS["accent_dark"]
@@ -303,7 +345,54 @@ class LandingAnalysisApp(tk.Tk):
             bd=0,
         )
         btn.pack(fill=tk.X, pady=3)
+        self._action_buttons.append(btn)
         return btn
+
+    def _set_busy(self, busy: bool):
+        self._busy = busy
+        state = tk.DISABLED if busy else tk.NORMAL
+        cursor = "watch" if busy else ""
+        try:
+            self.configure(cursor=cursor)
+        except tk.TclError:
+            pass
+        for btn in self._action_buttons:
+            try:
+                btn.configure(state=state)
+            except tk.TclError:
+                pass
+
+    def _period_code(self) -> str:
+        value = self.period_var.get()
+        return PERIOD_CODES.get(value, value)
+
+    def _backtest_mode_code(self) -> str:
+        value = self.backtest_mode_var.get()
+        return BACKTEST_MODE_CODES.get(value, value)
+
+    def _update_market_badge(self, query: str = ""):
+        text = (query or self.ticker_search_var.get()).strip()
+        if not text:
+            self.market_badge_var.set("")
+            return
+        market = detect_market_from_input(text)
+        self.market_badge_var.set(market)
+        badge_bg = COLORS["success_soft"] if market == "台股" else COLORS["accent_soft"]
+        badge_fg = COLORS["success"] if market == "台股" else COLORS["accent"]
+        self.market_badge_label.configure(bg=badge_bg, fg=badge_fg)
+
+    def _sync_ticker_from_search(self):
+        selected = self.ticker_search_var.get().strip()
+        if selected in self._ticker_catalog:
+            self.custom_ticker_var.set(self._ticker_catalog[selected])
+        elif selected:
+            self.custom_ticker_var.set(normalize_ticker_input(selected))
+        self._update_market_badge(selected)
+
+    def _bind_shortcuts(self):
+        self.bind("<Control-Return>", lambda _e: self.load_data())
+        self.bind("<Control-r>", lambda _e: self.run_backtest())
+        self.bind("<Control-l>", lambda _e: self.run_all())
 
     def _bind_sidebar_scroll(self, canvas: tk.Canvas):
         def _on_mousewheel(event):
@@ -340,8 +429,23 @@ class LandingAnalysisApp(tk.Tk):
         ).pack(anchor="w", pady=(2, 0))
 
         self.header_ticker_var = tk.StringVar(value="尚未載入")
+        self.market_badge_var = tk.StringVar(value="")
+        header_meta = tk.Frame(header_inner, bg=COLORS["surface"])
+        header_meta.pack(side=tk.RIGHT)
+
+        self.market_badge_label = tk.Label(
+            header_meta,
+            textvariable=self.market_badge_var,
+            bg=COLORS["surface_elevated"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+            padx=10,
+            pady=6,
+        )
+        self.market_badge_label.pack(side=tk.RIGHT, padx=(0, 8))
+
         tk.Label(
-            header_inner,
+            header_meta,
             textvariable=self.header_ticker_var,
             bg=COLORS["accent_soft"],
             fg=COLORS["accent"],
@@ -410,40 +514,38 @@ class LandingAnalysisApp(tk.Tk):
         # --- Ticker ---
         ticker_frame = self._sidebar_card(sidebar_pad, "標的")
 
-        self._sidebar_label(ticker_frame, "搜尋 / 選股").pack(anchor=tk.W)
+        self._sidebar_label(ticker_frame, "股票代號 / 名稱").pack(anchor=tk.W)
         self.ticker_search_var = tk.StringVar()
+        self.custom_ticker_var = tk.StringVar(value="AMAT")
         self.ticker_search_combo = ttk.Combobox(
             ticker_frame,
             textvariable=self.ticker_search_var,
             width=28,
             style="Dark.TCombobox",
         )
-        self.ticker_search_combo.pack(fill=tk.X, pady=(4, 8))
+        self.ticker_search_combo.pack(fill=tk.X, pady=(4, 4))
         self.ticker_search_combo.bind("<<ComboboxSelected>>", self._on_ticker_search_select)
         self.ticker_search_combo.bind("<KeyRelease>", self._on_ticker_search_key)
-
-        self._sidebar_label(ticker_frame, "自行輸入 Ticker").pack(anchor=tk.W)
-        self.custom_ticker_var = tk.StringVar(value="AMAT")
-        ttk.Entry(ticker_frame, textvariable=self.custom_ticker_var, width=30, style="Dark.TEntry").pack(fill=tk.X, pady=(4, 0))
+        self.ticker_search_combo.bind("<Return>", self._on_ticker_search_enter)
         self._sidebar_label(
             ticker_frame,
-            "中文或數字為台股，英文為美股（自動判定）",
+            "輸入中文或數字→台股，英文→美股 · Enter 載入",
             muted=True,
-        ).pack(anchor=tk.W, pady=(4, 0))
+        ).pack(anchor=tk.W, pady=(0, 0))
 
         # --- Custom params ---
-        self.custom_frame = self._sidebar_card(sidebar_pad, "自訂參數")
+        self.custom_params_section, self.custom_frame = self._sidebar_card_section(sidebar_pad, "自訂參數")
         self._build_custom_params(self.custom_frame)
 
         # --- General settings ---
         general = self._sidebar_card(sidebar_pad, "一般設定")
 
         self._sidebar_label(general, "資料期間").pack(anchor=tk.W)
-        self.period_var = tk.StringVar(value="12mo")
+        self.period_var = tk.StringVar(value=PERIOD_LABELS["12mo"])
         ttk.Combobox(
             general,
             textvariable=self.period_var,
-            values=["6mo", "12mo", "2y", "5y"],
+            values=list(PERIOD_LABELS.values()),
             state="readonly",
             width=28,
             style="Dark.TCombobox",
@@ -456,22 +558,41 @@ class LandingAnalysisApp(tk.Tk):
         )
 
         self._sidebar_label(general, "回測模式").pack(anchor=tk.W)
-        self.backtest_mode_var = tk.StringVar(value="rolling")
+        self.backtest_mode_var = tk.StringVar(value=BACKTEST_MODE_LABELS["rolling"])
         ttk.Combobox(
             general,
             textvariable=self.backtest_mode_var,
-            values=["rolling", "fixed"],
+            values=list(BACKTEST_MODE_LABELS.values()),
             state="readonly",
             width=28,
             style="Dark.TCombobox",
         ).pack(fill=tk.X, pady=(4, 0))
 
+        tk.Label(
+            sidebar_pad,
+            text="操作",
+            bg=COLORS["sidebar"],
+            fg=COLORS["muted_light"],
+            font=FONTS["section"],
+            anchor="w",
+        ).pack(fill=tk.X, pady=(6, 4))
+
         actions = tk.Frame(sidebar_pad, bg=COLORS["sidebar"])
-        actions.pack(fill=tk.X, pady=(4, 10))
-        self._action_button(actions, "1. 載入資料", self.load_data)
-        self._action_button(actions, "2. 落點分析", self.run_analysis)
-        self._action_button(actions, "3. 執行回測", self.run_backtest)
-        self._action_button(actions, "全部執行", self.run_all, primary=True)
+        actions.pack(fill=tk.X, pady=(0, 6))
+        self._action_button(actions, "載入並分析", self.load_data, primary=True)
+        self._action_button(actions, "重新分析", self.run_analysis)
+        self._action_button(actions, "執行回測", self.run_backtest)
+        self._action_button(actions, "一鍵全流程", self.run_all)
+
+        tk.Label(
+            sidebar_pad,
+            text="Ctrl+Enter 載入 · Ctrl+R 回測 · Ctrl+L 全流程",
+            bg=COLORS["sidebar"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+            wraplength=270,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 8))
 
         status_card = tk.Frame(
             sidebar_pad,
@@ -589,6 +710,11 @@ class LandingAnalysisApp(tk.Tk):
                 widget.configure(state=state)
             except tk.TclError:
                 pass
+        if enabled:
+            if not self.custom_params_section.winfo_ismapped():
+                self.custom_params_section.pack(fill=tk.X, pady=(0, 10))
+        else:
+            self.custom_params_section.pack_forget()
 
     def _on_strategy_change(self, _event=None):
         self._apply_strategy_template(self.strategy_var.get())
@@ -684,6 +810,7 @@ class LandingAnalysisApp(tk.Tk):
         else:
             self.ticker_search_var.set("")
             self.custom_ticker_var.set("")
+        self._update_market_badge(self.ticker_search_var.get())
 
     def _filter_ticker_search_values(self, query: str) -> list[str]:
         q = query.strip().lower()
@@ -704,22 +831,63 @@ class LandingAnalysisApp(tk.Tk):
         self._ticker_search_values = list(catalog.keys())
         filtered = self._filter_ticker_search_values(query)
         self.ticker_search_combo["values"] = filtered
+        self._sync_ticker_from_search()
+
+    def _on_ticker_search_enter(self, _event=None):
+        if self._busy:
+            return "break"
+        self._sync_ticker_from_search()
+        self.load_data()
+        return "break"
 
     def _on_ticker_search_select(self, _event=None):
         selected = self.ticker_search_var.get()
         if selected in self._ticker_catalog:
             self.custom_ticker_var.set(self._ticker_catalog[selected])
+            self._update_market_badge(selected)
             return
         for label, symbol in self._ticker_catalog.items():
             if selected.lower() in label.lower() or selected.upper() == symbol.upper():
                 self.ticker_search_var.set(label)
                 self.custom_ticker_var.set(symbol)
+                self._update_market_badge(label)
                 return
+        self._sync_ticker_from_search()
 
     def _on_ticker_preset(self, _event=None):
         self._on_ticker_search_select(_event)
 
     def _build_levels_tab(self):
+        toolbar = tk.Frame(self.levels_frame, bg=COLORS["bg"])
+        toolbar.pack(fill=tk.X, padx=12, pady=(12, 0))
+
+        tk.Label(
+            toolbar,
+            text="落點圖：滾輪縮放 · 左鍵拖曳平移 · 雙擊重置",
+            bg=COLORS["bg"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(side=tk.LEFT)
+
+        reset_btn = tk.Button(
+            toolbar,
+            text="重置視野",
+            command=self._reset_levels_zoom,
+            bg=COLORS["surface_elevated"],
+            fg=COLORS["text"],
+            activebackground=COLORS["border"],
+            activeforeground=COLORS["text"],
+            relief=tk.FLAT,
+            font=FONTS["caption"],
+            padx=10,
+            pady=4,
+            cursor="hand2",
+            highlightthickness=1,
+            highlightbackground=COLORS["border"],
+            bd=0,
+        )
+        reset_btn.pack(side=tk.RIGHT)
+
         chart_card = tk.Frame(
             self.levels_frame,
             bg=COLORS["surface"],
@@ -954,13 +1122,15 @@ class LandingAnalysisApp(tk.Tk):
         self._refresh_price_chart_view()
 
     def _resolve_ticker(self) -> str:
+        query = self.ticker_search_var.get().strip()
+        if query:
+            if query in self._ticker_catalog:
+                return self._ticker_catalog[query]
+            return normalize_ticker_input(query)
         manual = self.custom_ticker_var.get().strip()
         if manual:
             return normalize_ticker_input(manual)
-        selected = self.ticker_search_var.get().strip()
-        if selected in self._ticker_catalog:
-            return self._ticker_catalog[selected]
-        return normalize_ticker_input(selected)
+        return ""
 
     def _set_status(self, text: str, *, tone: str = "info"):
         color = {
@@ -972,14 +1142,17 @@ class LandingAnalysisApp(tk.Tk):
         self.status_label.configure(fg=color)
 
     def load_data(self):
+        if self._busy:
+            return
         try:
+            self._set_busy(True)
             self.engine = BacktestEngine(self._build_config_from_ui())
             self.ticker = self._resolve_ticker()
             self._set_status(f"正在載入 {self.ticker} ...", tone="warn")
             self.header_ticker_var.set(f"  {self.ticker}  ")
             self.df = fetch_stock_data(
                 self.ticker,
-                self.period_var.get(),
+                self._period_code(),
                 lookback_days=self.lookback_var.get(),
             )
             start, end = self.df.index[0].date(), self.df.index[-1].date()
@@ -997,13 +1170,18 @@ class LandingAnalysisApp(tk.Tk):
             messagebox.showerror("載入失敗", str(exc))
             self._set_status("載入失敗", tone="error")
             return
+        finally:
+            self._set_busy(False)
         self.run_analysis()
 
     def run_analysis(self):
+        if self._busy:
+            return
         if self.df is None:
             messagebox.showwarning("提示", "請先載入資料")
             return
         try:
+            self._set_busy(True)
             self.analysis = self.analyzer.analyze(self.df, self.ticker, self.lookback_var.get())
             self._populate_levels()
             self._draw_price_chart()
@@ -1012,15 +1190,20 @@ class LandingAnalysisApp(tk.Tk):
         except Exception as exc:
             messagebox.showerror("分析失敗", str(exc))
             self._set_status("分析失敗", tone="error")
+        finally:
+            self._set_busy(False)
 
     def run_backtest(self):
+        if self._busy:
+            return
         if self.df is None:
             messagebox.showwarning("提示", "請先載入資料")
             return
         try:
+            self._set_busy(True)
             self.engine = BacktestEngine(self._build_config_from_ui())
             lookback = self.lookback_var.get()
-            mode = self.backtest_mode_var.get()
+            mode = self._backtest_mode_code()
             if mode == "fixed":
                 self.backtest_result = self.engine.run_fixed(self.df, self.ticker, lookback)
             else:
@@ -1028,10 +1211,13 @@ class LandingAnalysisApp(tk.Tk):
             self._populate_backtest()
             self._draw_price_chart()
             self.notebook.select(self.backtest_frame)
-            self._set_status(f"回測完成 [{self.strategy_var.get()} / {mode}]")
+            mode_label = BACKTEST_MODE_LABELS.get(mode, mode)
+            self._set_status(f"回測完成 [{self.strategy_var.get()} / {mode_label}]")
         except Exception as exc:
             messagebox.showerror("回測失敗", str(exc))
             self._set_status("回測失敗", tone="error")
+        finally:
+            self._set_busy(False)
 
     def run_all(self):
         self.load_data()

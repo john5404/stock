@@ -98,7 +98,7 @@ def draw_empty_scheme_c(fig, ax_price, ax_ladder, ax_vp, colors: dict):
     ax_price.text(
         0.5,
         0.5,
-        "載入資料後將顯示\n價格落點線圖 · 落點階梯 · 成交量分布\n\n滾輪縮放 · 左鍵拖曳 · 雙擊重置",
+        "載入資料後將顯示\n價格落點線圖 · 落點階梯 · 成交量分布",
         transform=ax_price.transAxes,
         ha="center",
         va="center",
