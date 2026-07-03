@@ -67,19 +67,21 @@ class DataStoreTests(unittest.TestCase):
         merged = merge_ohlcv(a, b)
         self.assertEqual(len(merged), 8)
 
-    @patch("landing_analysis.tw_market_data.download_tw_period")
-    def test_initial_fetch_writes_cache_tw(self, mock_period):
+    @patch("landing_analysis.yf_market_data.download_range")
+    @patch("landing_analysis.yf_market_data.download_period")
+    def test_initial_fetch_writes_cache_tw(self, mock_period, mock_range):
         full = make_ohlcv(date(2023, 1, 1), 400)
-        mock_period.return_value = full
+        mock_range.return_value = full
 
         cached = update_cache("2330.TW", "12mo", data_dir=self.data_dir, lookback_days=120, as_of=date(2024, 7, 3))
         path = cache_path(self.data_dir, "2330.TW")
         self.assertTrue(path.exists())
         self.assertEqual(len(cached), 400)
-        mock_period.assert_called_once()
+        mock_range.assert_called()
+        mock_period.assert_not_called()
 
-    @patch("landing_analysis.tw_market_data.download_tw_range")
-    @patch("landing_analysis.tw_market_data.download_tw_period")
+    @patch("landing_analysis.yf_market_data.download_range")
+    @patch("landing_analysis.yf_market_data.download_period")
     def test_incremental_fetch_only_gets_new_dates_tw(self, mock_period, mock_range):
         full = make_ohlcv(date(2022, 1, 1), 700)
         existing = full[full.index <= pd.Timestamp("2024-07-03")]
@@ -109,21 +111,24 @@ class DataStoreTests(unittest.TestCase):
             sliced = slice_for_period(df, "12mo", lookback)
             self.assertGreaterEqual(len(sliced), lookback + 5)
 
-    @patch("landing_analysis.tw_market_data.download_tw_period")
-    def test_get_stock_data_reads_from_cache_file_tw(self, mock_period):
-        full = make_ohlcv(date(2022, 1, 1), 700)
-        mock_period.return_value = full
+    def test_get_stock_data_reads_from_cache_file_tw(self):
+        full = make_ohlcv(date(2020, 1, 1), 1100)
+        as_of = full.index.max().date()
+        path = cache_path(self.data_dir, "2330.TW")
+        save_cache(path, full)
 
-        out = get_stock_data("2330.TW", "12mo", data_dir=self.data_dir, lookback_days=120, as_of=date(2024, 7, 3))
-        self.assertGreaterEqual(len(out), 125)
-        mock_period.assert_called_once()
+        with patch("landing_analysis.yf_market_data.download_range") as mock_range, patch(
+            "landing_analysis.yf_market_data.download_period"
+        ) as mock_period:
+            out = get_stock_data("2330.TW", "12mo", data_dir=self.data_dir, lookback_days=120, as_of=as_of)
+            self.assertGreaterEqual(len(out), 125)
+            mock_range.assert_not_called()
+            mock_period.assert_not_called()
 
-        mock_period.reset_mock()
-        out2 = get_stock_data("2330.TW", "12mo", data_dir=self.data_dir, lookback_days=120, as_of=date(2024, 7, 3))
-        mock_period.assert_not_called()
+        out2 = get_stock_data("2330.TW", "12mo", data_dir=self.data_dir, lookback_days=120, as_of=as_of)
         self.assertEqual(len(out), len(out2))
 
-    @patch("landing_analysis.us_market_data.download_us_period")
+    @patch("landing_analysis.yf_market_data.download_period")
     def test_backtest_compatible_with_cached_data_us(self, mock_period):
         full = make_ohlcv(date(2022, 1, 1), 700)
         mock_period.return_value = full

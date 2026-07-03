@@ -2,6 +2,7 @@
 """Landing point analysis desktop UI."""
 
 import sys
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -30,7 +31,7 @@ from landing_analysis.data_fetcher import (
     normalize_ticker_input,
     ticker_market,
 )
-from landing_analysis.indicators import add_indicators
+from landing_analysis.indicators import ensure_indicators
 from landing_analysis.scheme_c_charts import (
     apply_price_axis_format,
     draw_empty_scheme_c,
@@ -101,6 +102,7 @@ class LandingAnalysisApp(tk.Tk):
         self.configure(bg=COLORS["bg"])
 
         self.df: pd.DataFrame | None = None
+        self.df_enriched: pd.DataFrame | None = None
         self.df_institutional: pd.DataFrame | None = None
         self.analysis = None
         self.backtest_result = None
@@ -1028,7 +1030,7 @@ class LandingAnalysisApp(tk.Tk):
             self.ax_ladder,
             self.ax_volume_profile,
             self.ax_institutional,
-            self.df,
+            self._chart_df(),
             self.analysis,
             ticker=self.ticker,
             strategy_name=self.strategy_var.get(),
@@ -1160,62 +1162,105 @@ class LandingAnalysisApp(tk.Tk):
         self.status_var.set(text)
         self.status_label.configure(fg=color)
 
-    def load_data(self):
+    def _chart_df(self) -> pd.DataFrame:
+        if self.df_enriched is not None:
+            return self.df_enriched
+        if self.df is not None:
+            return self.df
+        raise ValueError("No data loaded")
+
+    def _fetch_data_payload(self, ticker: str, period: str, lookback: int) -> dict:
+        df = fetch_stock_data(ticker, period, lookback_days=lookback)
+        df_institutional = None
+        inst_note = ""
+        if ticker_market(ticker) == "台股":
+            self.after(0, lambda: self._set_status(f"正在載入 {ticker} 三大法人 ...", tone="warn"))
+            try:
+                df_institutional = fetch_tw_institutional_data(ticker, period, lookback_days=lookback)
+                if df_institutional is not None and not df_institutional.empty:
+                    last_net = df_institutional["total_net"].iloc[-1]
+                    inst_note = f"\n三大法人(最新): {last_net:+,.0f} 股"
+            except Exception as inst_exc:
+                inst_note = f"\n三大法人: 未取得 ({inst_exc})"
+        df_enriched = ensure_indicators(df)
+        return {
+            "ticker": ticker,
+            "df": df,
+            "df_enriched": df_enriched,
+            "df_institutional": df_institutional,
+            "inst_note": inst_note,
+        }
+
+    def load_data(self, *, on_complete=None, run_analysis_after: bool = True, blocking: bool = False):
         if self._busy:
             return
-        try:
-            self._set_busy(True)
-            self.engine = BacktestEngine(self._build_config_from_ui())
-            self.ticker = self._resolve_ticker()
-            self._set_status(f"正在載入 {self.ticker} ...", tone="warn")
-            self.header_ticker_var.set(f"  {self.ticker}  ")
-            self.df = fetch_stock_data(
-                self.ticker,
-                self._period_code(),
-                lookback_days=self.lookback_var.get(),
-            )
-            self.df_institutional = None
-            inst_note = ""
-            if ticker_market(self.ticker) == "台股":
-                try:
-                    self.df_institutional = fetch_tw_institutional_data(
-                        self.ticker,
-                        self._period_code(),
-                        lookback_days=self.lookback_var.get(),
-                    )
-                    if self.df_institutional is not None and not self.df_institutional.empty:
-                        last_net = self.df_institutional["total_net"].iloc[-1]
-                        inst_note = f"\n三大法人(最新): {last_net:+,.0f} 股"
-                except Exception as inst_exc:
-                    inst_note = f"\n三大法人: 未取得 ({inst_exc})"
-            start, end = self.df.index[0].date(), self.df.index[-1].date()
-            last = self.df["Close"].iloc[-1]
-            self.summary_var.set(
-                f"模板: {self.strategy_var.get()}\n"
-                f"Ticker: {self.ticker}\n"
-                f"資料: {start} ~ {end}\n"
-                f"筆數: {len(self.df)}\n"
-                f"最新收盤: {last:,.2f}{inst_note}"
-            )
-            self._set_status(f"已載入 {self.ticker}，共 {len(self.df)} 筆")
-            self._draw_price_chart()
-        except Exception as exc:
-            messagebox.showerror("載入失敗", str(exc))
-            self._set_status("載入失敗", tone="error")
+        ticker = self._resolve_ticker()
+        if not ticker:
+            messagebox.showwarning("提示", "請輸入股票代號")
             return
-        finally:
-            self._set_busy(False)
-        self.run_analysis()
+
+        self._set_busy(True)
+        self.engine = BacktestEngine(self._build_config_from_ui())
+        period = self._period_code()
+        lookback = self.lookback_var.get()
+        self.ticker = ticker
+        self._set_status(f"正在載入 {ticker} 股價 ...", tone="warn")
+        self.header_ticker_var.set(f"  {ticker}  ")
+
+        def worker():
+            try:
+                payload = self._fetch_data_payload(ticker, period, lookback)
+                self.after(0, lambda: self._on_load_success(payload, on_complete, run_analysis_after))
+            except Exception as exc:
+                self.after(0, lambda: self._on_load_error(exc))
+
+        if blocking:
+            try:
+                payload = self._fetch_data_payload(ticker, period, lookback)
+                self._on_load_success(payload, on_complete, run_analysis_after)
+            except Exception as exc:
+                self._on_load_error(exc)
+            return
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_load_success(self, payload: dict, on_complete, run_analysis_after: bool):
+        self.ticker = payload["ticker"]
+        self.df = payload["df"]
+        self.df_enriched = payload["df_enriched"]
+        self.df_institutional = payload["df_institutional"]
+        start, end = self.df.index[0].date(), self.df.index[-1].date()
+        last = self.df["Close"].iloc[-1]
+        self.summary_var.set(
+            f"模板: {self.strategy_var.get()}\n"
+            f"Ticker: {self.ticker}\n"
+            f"資料: {start} ~ {end}\n"
+            f"筆數: {len(self.df)}\n"
+            f"最新收盤: {last:,.2f}{payload['inst_note']}"
+        )
+        self._set_status(f"已載入 {self.ticker}，共 {len(self.df)} 筆")
+        self._draw_price_chart()
+        self._set_busy(False)
+        if run_analysis_after:
+            self.run_analysis()
+        if on_complete:
+            on_complete()
+
+    def _on_load_error(self, exc: Exception):
+        messagebox.showerror("載入失敗", str(exc))
+        self._set_status("載入失敗", tone="error")
+        self._set_busy(False)
 
     def run_analysis(self):
         if self._busy:
             return
-        if self.df is None:
+        chart_df = self.df_enriched if self.df_enriched is not None else self.df
+        if chart_df is None:
             messagebox.showwarning("提示", "請先載入資料")
             return
         try:
             self._set_busy(True)
-            self.analysis = self.analyzer.analyze(self.df, self.ticker, self.lookback_var.get())
+            self.analysis = self.analyzer.analyze(chart_df, self.ticker, self.lookback_var.get())
             self._populate_levels()
             self._draw_price_chart()
             self.notebook.select(self.levels_frame)
@@ -1229,7 +1274,8 @@ class LandingAnalysisApp(tk.Tk):
     def run_backtest(self):
         if self._busy:
             return
-        if self.df is None:
+        chart_df = self.df_enriched if self.df_enriched is not None else self.df
+        if chart_df is None:
             messagebox.showwarning("提示", "請先載入資料")
             return
         try:
@@ -1238,9 +1284,9 @@ class LandingAnalysisApp(tk.Tk):
             lookback = self.lookback_var.get()
             mode = self._backtest_mode_code()
             if mode == "fixed":
-                self.backtest_result = self.engine.run_fixed(self.df, self.ticker, lookback)
+                self.backtest_result = self.engine.run_fixed(chart_df, self.ticker, lookback)
             else:
-                self.backtest_result = self.engine.run_rolling(self.df, self.ticker, lookback)
+                self.backtest_result = self.engine.run_rolling(chart_df, self.ticker, lookback)
             self._populate_backtest()
             self._draw_price_chart()
             self.notebook.select(self.backtest_frame)
@@ -1253,9 +1299,7 @@ class LandingAnalysisApp(tk.Tk):
             self._set_busy(False)
 
     def run_all(self):
-        self.load_data()
-        if self.df is not None:
-            self.run_backtest()
+        self.load_data(on_complete=self.run_backtest, run_analysis_after=True)
 
     def _populate_levels(self):
         if not self.analysis:
@@ -1334,7 +1378,8 @@ class LandingAnalysisApp(tk.Tk):
             return
         self.ax.clear()
         self.ax.set_facecolor(COLORS["chart_bg"])
-        plot_df = add_indicators(self.df.tail(180))
+        source = self.df_enriched if self.df_enriched is not None else self.df
+        plot_df = ensure_indicators(source.tail(180))
         dates = plot_df.index
         self.ax.plot(dates, plot_df["Close"], color=COLORS["accent_dark"], linewidth=2.2, label="Close", zorder=3)
         if plot_df["MA20"].notna().any():

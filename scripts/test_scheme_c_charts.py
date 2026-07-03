@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from landing_analysis.analyzer import LandingAnalyzer
-from landing_analysis.data_store import get_stock_data
 from landing_analysis.scheme_c_charts import (
     decimals_for_price_span,
     draw_empty_scheme_c,
@@ -56,8 +55,24 @@ class SchemeCChartTests(unittest.TestCase):
         self.assertGreater(profile.sum(), 0)
 
     def test_draw_scheme_c_with_analysis(self):
-        df = get_stock_data("AAPL", "6mo", lookback_days=60)
-        analysis = LandingAnalyzer().analyze(df, "AAPL", 42)
+        import pandas as pd
+        from landing_analysis.indicators import ensure_indicators
+
+        idx = pd.bdate_range("2024-01-01", periods=120)
+        close = pd.Series(range(100, 220), index=idx, dtype=float)
+        df = ensure_indicators(
+            pd.DataFrame(
+                {
+                    "Open": close - 0.5,
+                    "High": close + 1,
+                    "Low": close - 1,
+                    "Close": close,
+                    "Volume": 1_000_000,
+                },
+                index=idx,
+            )
+        )
+        analysis = LandingAnalyzer().analyze(df, "TEST", 42)
         fig = plt.figure(figsize=(10, 7))
         grid = fig.add_gridspec(3, 2, width_ratios=[2.4, 1], height_ratios=[1.1, 1.0, 0.75])
         ax_price = fig.add_subplot(grid[0:2, 0])

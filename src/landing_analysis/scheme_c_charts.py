@@ -9,7 +9,7 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 from .analyzer import AnalysisResult, LevelCluster
-from .indicators import add_indicators
+from .indicators import ensure_indicators
 
 
 def decimals_for_price_span(span: float) -> int:
@@ -260,7 +260,7 @@ def draw_scheme_c(
         ax.clear()
         _style_axis(ax, colors)
 
-    plot_df = add_indicators(df.tail(max(180, lookback_days + 30)))
+    plot_df = ensure_indicators(df.tail(max(180, lookback_days + 30)))
     train = df.iloc[-lookback_days:].copy()
     vp_centers, vp_profile = volume_profile_data(train)
     current = analysis.current_price
