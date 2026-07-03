@@ -902,33 +902,31 @@ class LandingAnalysisApp(tk.Tk):
         self,
         parent: tk.Frame,
         *,
-        column: int,
         title: str,
         subtitle: str,
         tag: str,
         tag_color: str,
     ) -> ttk.Treeview:
         wrap = tk.Frame(parent, bg=COLORS["surface"])
-        wrap.grid(row=0, column=column, sticky="nsew", padx=(0, 6 if column == 0 else 0))
+        wrap.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
 
         head = tk.Frame(wrap, bg=COLORS["surface"])
         head.pack(fill=tk.X, padx=4, pady=(0, 4))
-        tk.Label(head, text=title, bg=COLORS["surface"], fg=tag_color, font=FONTS["body_bold"]).pack(side=tk.LEFT)
-        tk.Label(head, text=subtitle, bg=COLORS["surface"], fg=COLORS["muted"], font=FONTS["caption"]).pack(
-            side=tk.LEFT, padx=(8, 0)
-        )
+        tk.Label(head, text=title, bg=COLORS["surface"], fg=tag_color, font=FONTS["body_bold"]).pack(anchor=tk.W)
+        if subtitle:
+            tk.Label(head, text=subtitle, bg=COLORS["surface"], fg=COLORS["muted"], font=FONTS["caption"]).pack(anchor=tk.W)
 
         cols = ("price", "strength", "methods")
-        tree = ttk.Treeview(wrap, columns=cols, show="headings", height=5, style="Custom.Treeview")
+        tree = ttk.Treeview(wrap, columns=cols, show="headings", height=6, style="Custom.Treeview")
         headers = {"price": "價位", "strength": "強度", "methods": "曲線來源"}
-        widths = {"price": 88, "strength": 56, "methods": 240}
+        widths = {"price": 72, "strength": 44, "methods": 148}
         for col in cols:
             tree.heading(col, text=headers[col])
             anchor = tk.CENTER if col != "methods" else tk.W
             tree.column(col, width=widths[col], anchor=anchor, stretch=(col == "methods"))
         tree.tag_configure(tag, foreground=tag_color)
         tree.tag_configure("even", background=COLORS["tree_zebra"])
-        tree.pack(fill=tk.X, expand=True)
+        tree.pack(fill=tk.BOTH, expand=True)
         return tree
 
     def _build_levels_tab(self):
@@ -965,53 +963,58 @@ class LandingAnalysisApp(tk.Tk):
         levels_body = tk.Frame(self.levels_frame, bg=COLORS["bg"])
         levels_body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
 
-        chart_card = tk.Frame(
-            levels_body,
-            bg=COLORS["surface"],
-            highlightbackground=COLORS["border"],
-            highlightthickness=1,
-        )
-        chart_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
         table_card = tk.Frame(
             levels_body,
             bg=COLORS["surface"],
             highlightbackground=COLORS["border"],
             highlightthickness=1,
+            width=292,
         )
-        table_card.pack(fill=tk.X)
+        table_card.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        table_card.pack_propagate(False)
 
         table_header = tk.Frame(table_card, bg=COLORS["surface"])
-        table_header.pack(fill=tk.X, padx=12, pady=(10, 4))
+        table_header.pack(fill=tk.X, padx=10, pady=(10, 6))
         tk.Label(
             table_header,
             text="落點一覽",
             bg=COLORS["surface"],
             fg=COLORS["text"],
             font=FONTS["section"],
-        ).pack(side=tk.LEFT)
+        ).pack(anchor=tk.W)
+        tk.Label(
+            table_header,
+            text="價位 · 強度 · 曲線來源",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(anchor=tk.W, pady=(2, 0))
 
-        tables_row = tk.Frame(table_card, bg=COLORS["surface"])
-        tables_row.pack(fill=tk.X, padx=8, pady=(0, 8))
-        tables_row.columnconfigure(0, weight=1)
-        tables_row.columnconfigure(1, weight=1)
+        tables_col = tk.Frame(table_card, bg=COLORS["surface"])
+        tables_col.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 8))
 
         self.support_tree = self._build_level_mini_table(
-            tables_row,
-            column=0,
+            tables_col,
             title="支撐價位",
-            subtitle="價位 · 強度 · 曲線來源",
+            subtitle="",
             tag="support",
             tag_color=COLORS["success"],
         )
         self.resistance_tree = self._build_level_mini_table(
-            tables_row,
-            column=1,
+            tables_col,
             title="阻力價位",
-            subtitle="價位 · 強度 · 曲線來源",
+            subtitle="",
             tag="resistance",
             tag_color=COLORS["danger"],
         )
+
+        chart_card = tk.Frame(
+            levels_body,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        chart_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         chart_card_inner = chart_card
 
