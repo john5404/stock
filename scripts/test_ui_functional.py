@@ -147,14 +147,12 @@ def test_ui_flow():
     assert_true(hasattr(root, "ax_institutional"), "institutional axis")
 
   def step_portfolio_mode():
-    root.app_mode_var.set(app.APP_MODES[1])
-    root._on_app_mode_change()
+    root._set_app_mode(app.APP_MODES[1])
     root.update_idletasks()
     assert_true(root.app_mode_var.get() == app.APP_MODES[1], "portfolio mode selected")
     assert_true(len(root._portfolio_sections) >= 1, "portfolio sections loaded")
-    assert_true(root.portfolio_trees["tw"] is not None, "tw portfolio tree")
-    root.app_mode_var.set(app.APP_MODES[0])
-    root._on_app_mode_change()
+    assert_true(root.portfolio_row_containers["tw"] is not None, "tw portfolio rows")
+    root._set_app_mode(app.APP_MODES[0])
     root.update_idletasks()
     assert_true(root.app_mode_var.get() == app.APP_MODES[0], "analysis mode restored")
 

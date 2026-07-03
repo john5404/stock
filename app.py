@@ -503,20 +503,31 @@ class LandingAnalysisApp(tk.Tk):
 
         mode_frame = self._sidebar_card(sidebar_pad, "功能")
         self.app_mode_var = tk.StringVar(value=APP_MODES[0])
-        mode_combo = ttk.Combobox(
-            mode_frame,
-            textvariable=self.app_mode_var,
-            values=list(APP_MODES),
-            state="readonly",
-            width=28,
-            style="Dark.TCombobox",
-        )
-        mode_combo.pack(fill=tk.X)
-        mode_combo.bind("<<ComboboxSelected>>", self._on_app_mode_change)
+        mode_btn_row = tk.Frame(mode_frame, bg=COLORS["sidebar_elevated"])
+        mode_btn_row.pack(fill=tk.X)
+        self._mode_buttons: dict[str, tk.Button] = {}
+        for mode in APP_MODES:
+            btn = tk.Button(
+                mode_btn_row,
+                text=mode,
+                command=lambda m=mode: self._set_app_mode(m),
+                bg=COLORS["sidebar_elevated"],
+                fg=COLORS["text_inverse"],
+                activebackground=COLORS["sidebar_border"],
+                activeforeground=COLORS["text_inverse"],
+                relief=tk.FLAT,
+                font=FONTS["body_bold"],
+                cursor="hand2",
+                padx=6,
+                pady=8,
+                highlightthickness=1,
+                highlightbackground=COLORS["sidebar_border"],
+                bd=0,
+            )
+            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4 if mode == APP_MODES[0] else 0))
+            self._mode_buttons[mode] = btn
 
         self.analysis_sidebar = tk.Frame(sidebar_pad, bg=COLORS["sidebar"])
-        self.analysis_sidebar.pack(fill=tk.X)
-
         self.portfolio_sidebar = tk.Frame(sidebar_pad, bg=COLORS["sidebar"])
 
         # --- Strategy template ---
@@ -639,10 +650,23 @@ class LandingAnalysisApp(tk.Tk):
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 8))
 
+        self.summary_var = tk.StringVar(value="")
+        self._analysis_summary_label = tk.Label(
+            self.analysis_sidebar,
+            textvariable=self.summary_var,
+            bg=COLORS["sidebar"],
+            fg=COLORS["muted_light"],
+            font=FONTS["caption"],
+            wraplength=270,
+            justify=tk.LEFT,
+        )
+        self._analysis_summary_label.pack(anchor=tk.W, pady=(6, 0))
+
         self._build_portfolio_sidebar(self.portfolio_sidebar)
 
+        self._shared_sidebar = tk.Frame(sidebar_pad, bg=COLORS["sidebar"])
         status_card = tk.Frame(
-            sidebar_pad,
+            self._shared_sidebar,
             bg=COLORS["sidebar_elevated"],
             highlightbackground=COLORS["sidebar_border"],
             highlightthickness=1,
@@ -663,29 +687,16 @@ class LandingAnalysisApp(tk.Tk):
             justify=tk.LEFT,
         )
         self.status_label.pack(anchor=tk.W, padx=12, pady=(0, 8))
-
-        self.summary_var = tk.StringVar(value="")
-        tk.Label(
-            sidebar_pad,
-            textvariable=self.summary_var,
-            bg=COLORS["sidebar"],
-            fg=COLORS["muted_light"],
-            font=FONTS["caption"],
-            wraplength=270,
-            justify=tk.LEFT,
-        ).pack(anchor=tk.W, pady=(6, 0))
+        self._shared_sidebar.pack(fill=tk.X)
 
         right = tk.Frame(body, bg=COLORS["bg"])
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.analysis_main = tk.Frame(right, bg=COLORS["bg"])
-        self.analysis_main.pack(fill=tk.BOTH, expand=True)
-
-        self.notebook = ttk.Notebook(self.analysis_main)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
-
         self.portfolio_main = tk.Frame(right, bg=COLORS["bg"])
         self._build_portfolio_tab()
+
+        self.notebook = ttk.Notebook(self.analysis_main)
 
         self.levels_frame = ttk.Frame(self.notebook, style="Surface.TFrame")
         self.backtest_frame = ttk.Frame(self.notebook, style="Surface.TFrame")
@@ -697,6 +708,8 @@ class LandingAnalysisApp(tk.Tk):
         self._build_levels_tab()
         self._build_backtest_tab()
         self._build_chart_tab()
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+        self._set_app_mode(APP_MODES[0])
 
     def _build_custom_params(self, parent):
         specs = [
@@ -1640,20 +1653,33 @@ class LandingAnalysisApp(tk.Tk):
         self.fig.autofmt_xdate()
         self.canvas.draw()
 
+    def _set_app_mode(self, mode: str):
+        if mode not in APP_MODES:
+            mode = APP_MODES[0]
+        self.app_mode_var.set(mode)
+        for name, btn in self._mode_buttons.items():
+            active = name == mode
+            btn.configure(
+                bg=COLORS["accent"] if active else COLORS["sidebar_elevated"],
+                fg="#b8c4d0" if active else COLORS["text_inverse"],
+                highlightbackground=COLORS["accent"] if active else COLORS["sidebar_border"],
+            )
+        self._on_app_mode_change()
+
     def _on_app_mode_change(self, _event=None):
         is_portfolio = self.app_mode_var.get() == APP_MODES[1]
+        self.analysis_sidebar.pack_forget()
+        self.portfolio_sidebar.pack_forget()
+        self.analysis_main.pack_forget()
+        self.portfolio_main.pack_forget()
         if is_portfolio:
-            self.analysis_sidebar.pack_forget()
             self.portfolio_sidebar.pack(fill=tk.X)
-            self.analysis_main.pack_forget()
             self.portfolio_main.pack(fill=tk.BOTH, expand=True)
             self._load_portfolio_data()
             self._render_portfolio()
             self._set_status("股市配比")
         else:
-            self.portfolio_sidebar.pack_forget()
             self.analysis_sidebar.pack(fill=tk.X)
-            self.portfolio_main.pack_forget()
             self.analysis_main.pack(fill=tk.BOTH, expand=True)
             self._set_status("就緒")
 
@@ -1711,11 +1737,15 @@ class LandingAnalysisApp(tk.Tk):
         ).pack(anchor=tk.W)
 
     def _build_portfolio_tab(self):
+        self.portfolio_row_containers: dict[str, tk.Frame] = {}
+        self.portfolio_total_vars: dict[str, dict[str, tk.StringVar]] = {}
+        self.portfolio_row_refs: dict[str, list[dict]] = {"tw": [], "us": []}
+
         toolbar = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
         toolbar.pack(fill=tk.X, padx=12, pady=(12, 0))
         tk.Label(
             toolbar,
-            text="持股配比 · 雙擊列可編輯 · 台股/美股分區顯示",
+            text="持股配比 · 直接輸入欄位 · 下方合計列自動計算",
             bg=COLORS["bg"],
             fg=COLORS["muted"],
             font=FONTS["caption"],
@@ -1775,7 +1805,6 @@ class LandingAnalysisApp(tk.Tk):
         self._bind_sidebar_scroll(canvas)
 
         self.portfolio_section_frames: dict[str, tk.Frame] = {}
-        self.portfolio_trees: dict[str, ttk.Treeview] = {}
         for sec_id, title, color in (
             ("tw", "台股 TW Stocks", COLORS["success"]),
             ("us", "美股 US Stocks", COLORS["accent"]),
@@ -1792,48 +1821,338 @@ class LandingAnalysisApp(tk.Tk):
             head = tk.Frame(card, bg=COLORS["surface"])
             head.pack(fill=tk.X, padx=12, pady=(10, 6))
             tk.Label(head, text=title, bg=COLORS["surface"], fg=color, font=FONTS["section"]).pack(side=tk.LEFT)
+
+            table_wrap = tk.Frame(card, bg=COLORS["surface"])
+            table_wrap.pack(fill=tk.X, padx=8, pady=(0, 8))
+
+            headers = self._portfolio_headers(sec_id)
+            header_row = tk.Frame(table_wrap, bg=COLORS["tree_header"])
+            header_row.pack(fill=tk.X)
+            for col, (text, width) in enumerate(headers):
+                tk.Label(
+                    header_row,
+                    text=text,
+                    bg=COLORS["tree_header"],
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    width=width,
+                    anchor=tk.W if col == 0 else tk.CENTER,
+                    padx=4,
+                    pady=6,
+                ).grid(row=0, column=col, sticky="ew")
+
+            rows_frame = tk.Frame(table_wrap, bg=COLORS["surface"])
+            rows_frame.pack(fill=tk.X)
+            self.portfolio_row_containers[sec_id] = rows_frame
+
+            total_row = tk.Frame(table_wrap, bg=COLORS["surface_elevated"], highlightbackground=COLORS["border"], highlightthickness=1)
+            total_row.pack(fill=tk.X, pady=(4, 0))
+            self.portfolio_total_vars[sec_id] = {
+                "subtotal": tk.StringVar(value="—"),
+                "twd": tk.StringVar(value="—"),
+                "weight": tk.StringVar(value="100%"),
+            }
+            for col, (_header, width) in enumerate(headers):
+                if col == 0:
+                    text_var: tk.StringVar | None = tk.StringVar(value="合計")
+                elif sec_id == "tw" and col == 7:
+                    text_var = self.portfolio_total_vars[sec_id]["subtotal"]
+                elif sec_id == "tw" and col == 8:
+                    text_var = self.portfolio_total_vars[sec_id]["weight"]
+                elif sec_id == "us" and col == 6:
+                    text_var = self.portfolio_total_vars[sec_id]["subtotal"]
+                elif sec_id == "us" and col == 7:
+                    text_var = self.portfolio_total_vars[sec_id]["twd"]
+                elif sec_id == "us" and col == 8:
+                    text_var = self.portfolio_total_vars[sec_id]["weight"]
+                else:
+                    text_var = tk.StringVar(value="")
+                tk.Label(
+                    total_row,
+                    textvariable=text_var,
+                    bg=COLORS["surface_elevated"],
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    width=width,
+                    anchor=tk.CENTER if col else tk.W,
+                    padx=4,
+                    pady=8,
+                ).grid(row=0, column=col, sticky="ew")
+
+    def _portfolio_headers(self, sec_id: str) -> list[tuple[str, int]]:
+        if sec_id == "tw":
+            return [
+                ("股票", 10),
+                ("備註", 8),
+                ("部位", 6),
+                ("股數", 7),
+                ("成本", 8),
+                ("現價", 8),
+                ("損益%", 7),
+                ("總價", 9),
+                ("比重", 7),
+                ("", 3),
+            ]
+        return [
+            ("股票", 10),
+            ("部位", 6),
+            ("股數", 7),
+            ("成本", 8),
+            ("現價", 8),
+            ("損益%", 7),
+            ("總價(USD)", 9),
+            ("總價(TWD)", 9),
+            ("比重", 7),
+            ("", 3),
+        ]
+
+    def _portfolio_entry(self, parent, var: tk.Variable, *, width: int = 8) -> ttk.Entry:
+        entry = ttk.Entry(parent, textvariable=var, width=width, style="Dark.TEntry")
+        return entry
+
+    def _portfolio_row_change(self, sec_id: str, row_idx: int):
+        refs = self.portfolio_row_refs.get(sec_id, [])
+        if row_idx < 0 or row_idx >= len(refs):
+            return
+        sec = self._portfolio_section(sec_id)
+        if sec is None or row_idx >= len(sec.rows):
+            return
+        ref = refs[row_idx]
+        row = sec.rows[row_idx]
+        row.name = ref["name"].get().strip()
+        row.note = ref["note"].get().strip() if "note" in ref else ""
+        pos = ref["position"].get()
+        row.position = "short" if pos in ("短線", "short") else "long"
+        try:
+            row.shares = float(ref["shares"].get() or 0)
+        except ValueError:
+            row.shares = 0.0
+        try:
+            row.cost = float(ref["cost"].get() or 0)
+        except ValueError:
+            row.cost = 0.0
+        self._update_portfolio_section_display(sec_id)
+        self._update_portfolio_summaries()
+
+    def _render_portfolio_rows(self, sec_id: str):
+        sec = self._portfolio_section(sec_id)
+        container = self.portfolio_row_containers.get(sec_id)
+        if sec is None or container is None:
+            return
+        for child in container.winfo_children():
+            child.destroy()
+        self.portfolio_row_refs[sec_id] = []
+        headers = self._portfolio_headers(sec_id)
+        calc = calc_section(sec)
+        apply_quotes(calc, self._portfolio_quotes)
+
+        for idx, item in enumerate(calc.items):
+            row = item.row
+            rf = tk.Frame(container, bg=COLORS["tree_zebra"] if idx % 2 else COLORS["surface"])
+            rf.pack(fill=tk.X, pady=1)
+
+            name_var = tk.StringVar(value=row.name)
+            note_var = tk.StringVar(value=row.note)
+            pos_var = tk.StringVar(value="短線" if row.position == "short" else "長線")
+            shares_var = tk.StringVar(value=str(row.shares) if row.shares else "")
+            cost_var = tk.StringVar(value=str(row.cost) if row.cost else "")
+            price_var = tk.StringVar(value=f"{item.price:,.2f}" if item.price is not None else "—")
+            pl_var = tk.StringVar(value=f"{item.pl_pct:+.2f}%" if item.pl_pct is not None else "—")
+            total_var = tk.StringVar(value=f"{item.subtotal:,.2f}")
+            twd_var = tk.StringVar(value=f"{item.twd:,.0f}")
+            weight_var = tk.StringVar(value=f"{item.weight:.2f}%")
+
+            col = 0
+            name_entry = self._portfolio_entry(rf, name_var, width=headers[0][1])
+            name_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            col += 1
+
+            ref: dict = {"name": name_var, "position": pos_var, "shares": shares_var, "cost": cost_var}
+            if sec_id == "tw":
+                note_entry = self._portfolio_entry(rf, note_var, width=headers[1][1])
+                note_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+                ref["note"] = note_var
+                col += 1
+
+            pos_combo = ttk.Combobox(
+                rf,
+                textvariable=pos_var,
+                values=["長線", "短線"],
+                state="readonly",
+                width=headers[col][1],
+                style="Dark.TCombobox",
+            )
+            pos_combo.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            col += 1
+
+            shares_entry = self._portfolio_entry(rf, shares_var, width=headers[col][1])
+            shares_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            col += 1
+
+            cost_entry = self._portfolio_entry(rf, cost_var, width=headers[col][1])
+            cost_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            col += 1
+
+            for var in (price_var, pl_var):
+                tk.Label(
+                    rf,
+                    textvariable=var,
+                    bg=rf["bg"],
+                    fg=COLORS["muted"],
+                    font=FONTS["body"],
+                    width=headers[col][1],
+                    anchor=tk.CENTER,
+                ).grid(row=0, column=col, padx=2, pady=3)
+                col += 1
+
+            tk.Label(
+                rf,
+                textvariable=total_var,
+                bg=rf["bg"],
+                fg=COLORS["text"],
+                font=FONTS["body"],
+                width=headers[col][1],
+                anchor=tk.CENTER,
+            ).grid(row=0, column=col, padx=2, pady=3)
+            col += 1
+
+            if sec_id == "us":
+                tk.Label(
+                    rf,
+                    textvariable=twd_var,
+                    bg=rf["bg"],
+                    fg=COLORS["text"],
+                    font=FONTS["body"],
+                    width=headers[col][1],
+                    anchor=tk.CENTER,
+                ).grid(row=0, column=col, padx=2, pady=3)
+                col += 1
+
+            tk.Label(
+                rf,
+                textvariable=weight_var,
+                bg=rf["bg"],
+                fg=COLORS["accent"],
+                font=FONTS["body_bold"],
+                width=headers[col][1],
+                anchor=tk.CENTER,
+            ).grid(row=0, column=col, padx=2, pady=3)
+            col += 1
+
             tk.Button(
-                head,
-                text="刪除選取",
-                command=lambda sid=sec_id: self._portfolio_delete_selected(sid),
-                bg=COLORS["surface_elevated"],
+                rf,
+                text="×",
+                command=lambda sid=sec_id, i=idx: self._portfolio_delete_row(sid, i),
+                bg=rf["bg"],
                 fg=COLORS["danger"],
                 relief=tk.FLAT,
-                font=FONTS["caption"],
-                padx=8,
-                pady=2,
-            ).pack(side=tk.RIGHT)
+                font=FONTS["body_bold"],
+                width=2,
+                cursor="hand2",
+            ).grid(row=0, column=col, padx=2, pady=3)
 
-            cols = ("name", "note", "position", "shares", "cost", "price", "pl", "total", "weight")
-            tree = ttk.Treeview(card, columns=cols, show="headings", height=8, style="Custom.Treeview")
-            headers = {
-                "name": "股票",
-                "note": "備註",
-                "position": "部位",
-                "shares": "股數",
-                "cost": "成本",
-                "price": "現價",
-                "pl": "損益%",
-                "total": "總價",
-                "weight": "比重",
-            }
-            widths = {"name": 90, "note": 70, "position": 56, "shares": 70, "cost": 80, "price": 80, "pl": 70, "total": 90, "weight": 70}
-            for col in cols:
-                tree.heading(col, text=headers[col])
-                anchor = tk.CENTER if col not in {"name", "note"} else tk.W
-                tree.column(col, width=widths[col], anchor=anchor)
-            tree.tag_configure("long", foreground=COLORS["success"])
-            tree.tag_configure("short", foreground=COLORS["danger"])
-            tree.tag_configure("even", background=COLORS["tree_zebra"])
-            tree.pack(fill=tk.X, padx=8, pady=(0, 10))
-            tree.bind("<Double-1>", lambda e, sid=sec_id: self._portfolio_edit_selected(sid))
-            self.portfolio_trees[sec_id] = tree
+            ref.update(
+                {
+                    "price": price_var,
+                    "pl": pl_var,
+                    "pl_label": None,
+                    "total": total_var,
+                    "twd": twd_var,
+                    "weight": weight_var,
+                    "frame": rf,
+                }
+            )
+            self.portfolio_row_refs[sec_id].append(ref)
+
+            for widget in (name_entry, shares_entry, cost_entry):
+                widget.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
+            if sec_id == "tw":
+                note_entry.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
+            pos_combo.bind("<<ComboboxSelected>>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
+
+        self._update_portfolio_section_display(sec_id)
+
+    def _update_portfolio_section_display(self, sec_id: str):
+        sec = self._portfolio_section(sec_id)
+        if sec is None:
+            return
+        calc = calc_section(sec)
+        apply_quotes(calc, self._portfolio_quotes)
+        refs = self.portfolio_row_refs.get(sec_id, [])
+        for idx, item in enumerate(calc.items):
+            if idx >= len(refs):
+                break
+            ref = refs[idx]
+            ref["price"].set(f"{item.price:,.2f}" if item.price is not None else "—")
+            ref["pl"].set(f"{item.pl_pct:+.2f}%" if item.pl_pct is not None else "—")
+            ref["total"].set(f"{item.subtotal:,.2f}")
+            ref["twd"].set(f"{item.twd:,.0f}")
+            ref["weight"].set(f"{item.weight:.2f}%")
+
+        totals = self.portfolio_total_vars.get(sec_id, {})
+        if totals:
+            totals["subtotal"].set(f"{calc.total:,.2f}")
+            totals["twd"].set(f"{calc.total_twd:,.0f}")
+            totals["weight"].set("100%")
 
     def _portfolio_section(self, sec_id: str) -> PortfolioSection | None:
         for sec in self._portfolio_sections:
             if sec.id == sec_id:
                 return sec
         return None
+
+    def _sync_portfolio_rows_from_refs(self, sec_id: str):
+        sec = self._portfolio_section(sec_id)
+        refs = self.portfolio_row_refs.get(sec_id, [])
+        if sec is None or not refs:
+            return
+        for idx, ref in enumerate(refs):
+            if idx >= len(sec.rows):
+                break
+            row = sec.rows[idx]
+            row.name = ref["name"].get().strip()
+            row.note = ref["note"].get().strip() if "note" in ref else ""
+            pos = ref["position"].get()
+            row.position = "short" if pos in ("短線", "short") else "long"
+            try:
+                row.shares = float(ref["shares"].get() or 0)
+            except ValueError:
+                row.shares = 0.0
+            try:
+                row.cost = float(ref["cost"].get() or 0)
+            except ValueError:
+                row.cost = 0.0
+
+    def _update_portfolio_summaries(self):
+        grand = portfolio_total_twd(self._portfolio_sections)
+        try:
+            budget = float(self.portfolio_budget_var.get() or 0)
+        except ValueError:
+            budget = 0.0
+        tw_total = calc_section(self._portfolio_section("tw")).total_twd if self._portfolio_section("tw") else 0
+        us_total = calc_section(self._portfolio_section("us")).total_twd if self._portfolio_section("us") else 0
+        remaining = budget - grand if budget > 0 else None
+        lines = [
+            f"投資組合總計：{grand:,.0f} TWD",
+            f"台股 {tw_total:,.0f} TWD　｜　美股 {us_total:,.0f} TWD（含匯率）",
+        ]
+        if budget > 0:
+            lines.append(f"預算 {budget:,.0f} TWD　｜　已投入 {grand / budget * 100:.2f}%")
+            if remaining is not None:
+                label = "剩餘" if remaining >= 0 else "超支"
+                lines.append(f"{label} {abs(remaining):,.0f} TWD")
+        for sec in self._portfolio_sections:
+            stats = calc_position_stats(sec)
+            lines.append(
+                f"{sec.title} 長線 {stats['long']['weight']:.1f}% / 短線 {stats['short']['weight']:.1f}%"
+            )
+        self.portfolio_grand_summary_var.set("\n".join(lines))
+        self.portfolio_summary_var.set(
+            "\n".join(
+                f"{sec.title}: {calc_section(sec).total_twd:,.0f} TWD"
+                for sec in self._portfolio_sections
+            )
+        )
 
     def _ensure_portfolio_sections(self):
         if not self._portfolio_sections:
@@ -1872,6 +2191,8 @@ class LandingAnalysisApp(tk.Tk):
 
     def _save_portfolio(self):
         self._ensure_portfolio_sections()
+        for sec_id in ("tw", "us"):
+            self._sync_portfolio_rows_from_refs(sec_id)
         try:
             budget = float(self.portfolio_budget_var.get() or 0)
         except ValueError:
@@ -1898,7 +2219,7 @@ class LandingAnalysisApp(tk.Tk):
 
     def _on_portfolio_quotes_ready(self, quotes: dict, error: Exception | None):
         self._portfolio_quotes = quotes
-        self._render_portfolio()
+        self._render_portfolio(rebuild=False)
         self._set_busy(False)
         if error:
             self.portfolio_quote_status_var.set(f"報價更新失敗: {error}")
@@ -1907,176 +2228,34 @@ class LandingAnalysisApp(tk.Tk):
             self.portfolio_quote_status_var.set(f"報價已更新（{len(quotes)} 檔）")
             self._set_status("報價已更新")
 
-    def _render_portfolio(self):
+    def _render_portfolio(self, *, rebuild: bool = True):
         self._ensure_portfolio_sections()
-        for sec in self._portfolio_sections:
-            calc = calc_section(sec)
-            apply_quotes(calc, self._portfolio_quotes)
-            tree = self.portfolio_trees.get(sec.id)
-            if tree is None:
-                continue
-            for item in tree.get_children():
-                tree.delete(item)
-            for idx, item in enumerate(calc.items):
-                row = item.row
-                pl_text = "—"
-                tags = [row.position, "even" if idx % 2 else "odd"]
-                if item.pl_pct is not None:
-                    pl_text = f"{item.pl_pct:+.2f}%"
-                price_text = f"{item.price:,.2f}" if item.price is not None else "—"
-                values = (
-                    row.name,
-                    row.note if sec.id == "tw" else "",
-                    "長線" if row.position == "long" else "短線",
-                    f"{row.shares:,.0f}" if row.shares else "",
-                    f"{row.cost:,.2f}" if row.cost else "",
-                    price_text,
-                    pl_text,
-                    f"{item.subtotal:,.2f}",
-                    f"{item.weight:.2f}%",
-                )
-                if sec.id != "tw":
-                    tree.column("note", width=0, stretch=False)
-                tree.insert("", tk.END, iid=f"{sec.id}:{idx}", values=values, tags=tuple(tags))
+        if rebuild or not self.portfolio_row_refs.get("tw"):
+            for sec_id in ("tw", "us"):
+                self._sync_portfolio_rows_from_refs(sec_id)
+                self._render_portfolio_rows(sec_id)
+        else:
+            for sec_id in ("tw", "us"):
+                self._update_portfolio_section_display(sec_id)
+        self._update_portfolio_summaries()
 
-        grand = portfolio_total_twd(self._portfolio_sections)
-        try:
-            budget = float(self.portfolio_budget_var.get() or 0)
-        except ValueError:
-            budget = 0.0
-        tw_total = calc_section(self._portfolio_section("tw")).total_twd if self._portfolio_section("tw") else 0
-        us_total = calc_section(self._portfolio_section("us")).total_twd if self._portfolio_section("us") else 0
-        remaining = budget - grand if budget > 0 else None
-        lines = [
-            f"投資組合總計：{grand:,.0f} TWD",
-            f"台股 {tw_total:,.0f} TWD　｜　美股 {us_total:,.0f} TWD（含匯率）",
-        ]
-        if budget > 0:
-            lines.append(f"預算 {budget:,.0f} TWD　｜　已投入 {grand / budget * 100:.2f}%")
-            if remaining is not None:
-                label = "剩餘" if remaining >= 0 else "超支"
-                lines.append(f"{label} {abs(remaining):,.0f} TWD")
-        for sec in self._portfolio_sections:
-            stats = calc_position_stats(sec)
-            lines.append(
-                f"{sec.title} 長線 {stats['long']['weight']:.1f}% / 短線 {stats['short']['weight']:.1f}%"
-            )
-        self.portfolio_grand_summary_var.set("\n".join(lines))
-        self.portfolio_summary_var.set(
-            "\n".join(
-                f"{sec.title}: {calc_section(sec).total_twd:,.0f} TWD"
-                for sec in self._portfolio_sections
-            )
-        )
-
-    def _portfolio_row_index(self, sec_id: str, iid: str) -> int | None:
-        if not iid.startswith(f"{sec_id}:"):
-            return None
-        try:
-            return int(iid.split(":", 1)[1])
-        except ValueError:
-            return None
+    def _portfolio_delete_row(self, sec_id: str, row_idx: int):
+        self._sync_portfolio_rows_from_refs(sec_id)
+        sec = self._portfolio_section(sec_id)
+        if sec is None or row_idx < 0 or row_idx >= len(sec.rows):
+            return
+        sec.rows.pop(row_idx)
+        self._render_portfolio_rows(sec_id)
+        self._update_portfolio_summaries()
 
     def _portfolio_add_row(self, sec_id: str):
+        self._sync_portfolio_rows_from_refs(sec_id)
         sec = self._portfolio_section(sec_id)
         if sec is None:
             return
         sec.rows.append(PortfolioRow(name="", note="", position="long", shares=0, cost=0))
-        self._render_portfolio()
-        self._portfolio_edit_row(sec_id, len(sec.rows) - 1)
-
-    def _portfolio_delete_selected(self, sec_id: str):
-        tree = self.portfolio_trees.get(sec_id)
-        sec = self._portfolio_section(sec_id)
-        if tree is None or sec is None:
-            return
-        selected = tree.selection()
-        if not selected:
-            return
-        indexes = sorted(
-            (idx for iid in selected if (idx := self._portfolio_row_index(sec_id, iid)) is not None),
-            reverse=True,
-        )
-        for idx in indexes:
-            sec.rows.pop(idx)
-        self._render_portfolio()
-
-    def _portfolio_edit_selected(self, sec_id: str):
-        tree = self.portfolio_trees.get(sec_id)
-        if tree is None or not tree.selection():
-            return
-        iid = tree.selection()[0]
-        idx = self._portfolio_row_index(sec_id, iid)
-        if idx is not None:
-            self._portfolio_edit_row(sec_id, idx)
-
-    def _portfolio_edit_row(self, sec_id: str, row_idx: int):
-        sec = self._portfolio_section(sec_id)
-        if sec is None or row_idx < 0 or row_idx >= len(sec.rows):
-            return
-        row = sec.rows[row_idx]
-
-        dialog = tk.Toplevel(self)
-        dialog.title("編輯持股")
-        dialog.configure(bg=COLORS["surface"])
-        dialog.transient(self)
-        dialog.grab_set()
-
-        fields: dict[str, tk.Variable] = {
-            "name": tk.StringVar(value=row.name),
-            "note": tk.StringVar(value=row.note),
-            "position": tk.StringVar(value="long" if row.position == "long" else "short"),
-            "shares": tk.StringVar(value=str(row.shares or "")),
-            "cost": tk.StringVar(value=str(row.cost or "")),
-        }
-
-        body = tk.Frame(dialog, bg=COLORS["surface"], padx=16, pady=16)
-        body.pack(fill=tk.BOTH, expand=True)
-
-        def add_row(label: str, key: str, widget="entry"):
-            tk.Label(body, text=label, bg=COLORS["surface"], fg=COLORS["text"], font=FONTS["body"]).pack(anchor=tk.W, pady=(8, 2))
-            if widget == "combo":
-                ttk.Combobox(
-                    body,
-                    textvariable=fields[key],
-                    values=["long", "short"],
-                    state="readonly",
-                    style="Dark.TCombobox",
-                ).pack(fill=tk.X)
-            else:
-                ttk.Entry(body, textvariable=fields[key], style="Dark.TEntry").pack(fill=tk.X)
-
-        add_row("股票名稱 / 代號", "name")
-        if sec_id == "tw":
-            add_row("備註", "note")
-        add_row("部位 (long / short)", "position", "combo")
-        add_row("股數", "shares")
-        add_row("成本", "cost")
-
-        btns = tk.Frame(body, bg=COLORS["surface"])
-        btns.pack(fill=tk.X, pady=(14, 0))
-
-        def save():
-            row.name = fields["name"].get().strip()
-            row.note = fields["note"].get().strip()
-            row.position = fields["position"].get().strip().lower() or "long"
-            try:
-                row.shares = float(fields["shares"].get() or 0)
-            except ValueError:
-                row.shares = 0.0
-            try:
-                row.cost = float(fields["cost"].get() or 0)
-            except ValueError:
-                row.cost = 0.0
-            dialog.destroy()
-            self._render_portfolio()
-
-        tk.Button(btns, text="儲存", command=save, bg=COLORS["accent"], fg="#b8c4d0", relief=tk.FLAT, padx=12, pady=6).pack(
-            side=tk.RIGHT
-        )
-        tk.Button(btns, text="取消", command=dialog.destroy, bg=COLORS["surface_elevated"], fg=COLORS["text"], relief=tk.FLAT, padx=12, pady=6).pack(
-            side=tk.RIGHT, padx=(0, 8)
-        )
+        self._render_portfolio_rows(sec_id)
+        self._update_portfolio_summaries()
 
 
 def main():
