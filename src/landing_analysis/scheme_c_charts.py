@@ -90,15 +90,144 @@ def _style_axis(ax, colors: dict):
     ax.tick_params(colors=colors["muted"], labelsize=8)
 
 
-def draw_empty_scheme_c(fig, ax_price, ax_ladder, ax_vp, colors: dict):
-    for ax in (ax_price, ax_ladder, ax_vp):
+def _compact_share_label(value: float, _pos: int) -> str:
+    abs_v = abs(value)
+    sign = "-" if value < 0 else ""
+    if abs_v >= 1_000_000:
+        return f"{sign}{abs_v / 1_000_000:.1f}M"
+    if abs_v >= 1_000:
+        return f"{sign}{abs_v / 1_000:.0f}K"
+    return f"{value:,.0f}"
+
+
+def draw_institutional_chart(
+    ax,
+    inst_df: pd.DataFrame | None,
+    *,
+    colors: dict,
+    lookback_days: int,
+    ticker: str,
+    is_tw: bool,
+):
+    ax.clear()
+    _style_axis(ax, colors)
+
+    if not is_tw:
+        ax.set_title("三大法人買賣超", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
+        ax.text(
+            0.5,
+            0.5,
+            "三大法人僅支援台股",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color=colors["muted"],
+            fontsize=10,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+        return
+
+    if inst_df is None or inst_df.empty:
+        ax.set_title("三大法人買賣超", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
+        ax.text(
+            0.5,
+            0.5,
+            "未取得三大法人資料\n請確認 FINMIND_TOKEN 已設定",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color=colors["muted"],
+            fontsize=10,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+        return
+
+    plot_df = inst_df.tail(min(len(inst_df), max(lookback_days, 30))).copy()
+    dates = plot_df.index
+    x = mdates.date2num(dates.to_pydatetime())
+    bar_w = 0.22
+
+    series = [
+        ("foreign_net", "外資", colors["accent"]),
+        ("trust_net", "投信", colors["success"]),
+        ("dealer_net", "自營", colors["warning"]),
+    ]
+    for idx, (col, label, color) in enumerate(series):
+        offset = (idx - 1) * bar_w
+        values = plot_df[col].values
+        bar_colors = [colors["success"] if v >= 0 else colors["danger"] for v in values]
+        ax.bar(
+            x + offset,
+            values,
+            width=bar_w * 0.95,
+            color=bar_colors,
+            alpha=0.82,
+            edgecolor=colors["border"],
+            linewidth=0.2,
+            label=label,
+        )
+
+    ax.plot(
+        dates,
+        plot_df["total_net"],
+        color=colors["text"],
+        linewidth=1.3,
+        alpha=0.75,
+        label="合計",
+        zorder=5,
+    )
+    ax.axhline(0, color=colors["border"], linewidth=0.9, alpha=0.9, zorder=1)
+
+    last = plot_df.iloc[-1]
+    summary = (
+        f"最新  外資 {last['foreign_net']:+,.0f}  "
+        f"投信 {last['trust_net']:+,.0f}  "
+        f"自營 {last['dealer_net']:+,.0f}  "
+        f"合計 {last['total_net']:+,.0f} 股"
+    )
+    ax.set_title(
+        f"{ticker} · 三大法人買賣超（股）",
+        color=colors["text"],
+        fontsize=10,
+        fontweight="bold",
+        pad=8,
+    )
+    ax.text(
+        0.01,
+        0.98,
+        summary,
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=7,
+        color=colors["muted"],
+    )
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
+    ax.yaxis.set_major_formatter(FuncFormatter(_compact_share_label))
+    ax.set_ylabel("買賣超", color=colors["muted"], fontsize=8)
+    ax.tick_params(axis="x", rotation=0, labelsize=7)
+    ax.legend(
+        loc="upper right",
+        fontsize=7,
+        ncol=4,
+        framealpha=0.92,
+        facecolor=colors["surface"],
+        edgecolor=colors["border"],
+        labelcolor=colors["text"],
+    )
+
+
+def draw_empty_scheme_c(fig, ax_price, ax_ladder, ax_vp, ax_institutional, colors: dict):
+    for ax in (ax_price, ax_ladder, ax_vp, ax_institutional):
         ax.clear()
         _style_axis(ax, colors)
     ax_price.set_title("方案 C · 落點分析", color=colors["text"], fontsize=12, fontweight="bold", pad=10)
     ax_price.text(
         0.5,
         0.5,
-        "載入資料後將顯示\n價格落點線圖 · 落點階梯 · 成交量分布",
+        "載入資料後將顯示\n價格落點線圖 · 落點階梯 · 成交量分布 · 三大法人",
         transform=ax_price.transAxes,
         ha="center",
         va="center",
@@ -107,7 +236,8 @@ def draw_empty_scheme_c(fig, ax_price, ax_ladder, ax_vp, colors: dict):
     )
     ax_ladder.set_title("落點階梯", color=colors["text"], fontsize=10, pad=8)
     ax_vp.set_title("成交量價格分布", color=colors["text"], fontsize=10, pad=8)
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.12, wspace=0.35)
+    draw_institutional_chart(ax_institutional, None, colors=colors, lookback_days=42, ticker="", is_tw=False)
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.94, bottom=0.10, wspace=0.32, hspace=0.42)
 
 
 def draw_scheme_c(
@@ -115,6 +245,7 @@ def draw_scheme_c(
     ax_price,
     ax_ladder,
     ax_vp,
+    ax_institutional,
     df: pd.DataFrame,
     analysis: AnalysisResult,
     *,
@@ -122,6 +253,8 @@ def draw_scheme_c(
     strategy_name: str,
     colors: dict,
     lookback_days: int,
+    inst_df: pd.DataFrame | None = None,
+    is_tw: bool = False,
 ):
     for ax in (ax_price, ax_ladder, ax_vp):
         ax.clear()
@@ -316,4 +449,13 @@ def draw_scheme_c(
     ax_vp.set_yticklabels([])
     ax_vp.tick_params(axis="x", labelsize=7)
 
-    fig.subplots_adjust(left=0.09, right=0.92, top=0.94, bottom=0.08, wspace=0.32, hspace=0.35)
+    draw_institutional_chart(
+        ax_institutional,
+        inst_df,
+        colors=colors,
+        lookback_days=lookback_days,
+        ticker=ticker,
+        is_tw=is_tw,
+    )
+
+    fig.subplots_adjust(left=0.09, right=0.92, top=0.94, bottom=0.10, wspace=0.32, hspace=0.42)

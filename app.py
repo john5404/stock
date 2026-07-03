@@ -902,12 +902,21 @@ class LandingAnalysisApp(tk.Tk):
         )
         chart_card.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
 
-        self.levels_fig = plt.figure(figsize=(11, 6.5), dpi=100)
+        self.levels_fig = plt.figure(figsize=(11, 8.2), dpi=100)
         self.levels_fig.patch.set_facecolor(COLORS["surface"])
-        grid = GridSpec(2, 2, figure=self.levels_fig, width_ratios=[2.4, 1], height_ratios=[1, 1], wspace=0.28, hspace=0.32)
-        self.ax_price_levels = self.levels_fig.add_subplot(grid[:, 0])
+        grid = GridSpec(
+            3,
+            2,
+            figure=self.levels_fig,
+            width_ratios=[2.4, 1],
+            height_ratios=[1.1, 1.0, 0.75],
+            wspace=0.28,
+            hspace=0.38,
+        )
+        self.ax_price_levels = self.levels_fig.add_subplot(grid[0:2, 0])
         self.ax_ladder = self.levels_fig.add_subplot(grid[0, 1])
         self.ax_volume_profile = self.levels_fig.add_subplot(grid[1, 1])
+        self.ax_institutional = self.levels_fig.add_subplot(grid[2, :])
 
         self.levels_canvas = FigureCanvasTkAgg(self.levels_fig, master=chart_card)
         self.levels_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
@@ -1004,6 +1013,7 @@ class LandingAnalysisApp(tk.Tk):
             self.ax_price_levels,
             self.ax_ladder,
             self.ax_volume_profile,
+            self.ax_institutional,
             COLORS,
         )
         self.levels_canvas.draw()
@@ -1017,12 +1027,15 @@ class LandingAnalysisApp(tk.Tk):
             self.ax_price_levels,
             self.ax_ladder,
             self.ax_volume_profile,
+            self.ax_institutional,
             self.df,
             self.analysis,
             ticker=self.ticker,
             strategy_name=self.strategy_var.get(),
             colors=COLORS,
             lookback_days=self.lookback_var.get(),
+            inst_df=self.df_institutional,
+            is_tw=ticker_market(self.ticker) == "台股",
         )
         self._capture_levels_zoom_defaults()
         self.levels_canvas.draw()

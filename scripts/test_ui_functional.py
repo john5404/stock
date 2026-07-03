@@ -126,9 +126,11 @@ def test_ui_flow():
     root._draw_empty_levels_chart()
     root._draw_empty_chart()
     root.df = None
+    root.df_institutional = None
     root._draw_price_chart()
     assert_true(root.canvas is not None, "chart canvas")
     assert_true(root.levels_canvas is not None, "levels canvas")
+    assert_true(hasattr(root, "ax_institutional"), "institutional axis")
 
   print("LandingAnalysisApp functional tests")
   run_step("init", step_init)
