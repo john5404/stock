@@ -146,7 +146,8 @@ def draw_scheme_c(
         Line2D([0], [0], color=colors["success"], linestyle="--", linewidth=1.5, label="支撐"),
         Line2D([0], [0], color=colors["danger"], linestyle="--", linewidth=1.5, label="阻力"),
     ]
-    ax_price.legend(handles=legend_items, loc="upper left", fontsize=7, framealpha=0.92)
+    ax_price.legend(handles=legend_items, loc="upper left", fontsize=7, framealpha=0.92,
+                    facecolor=colors["surface"], edgecolor=colors["border"], labelcolor=colors["text"])
 
     # --- Price ladder ---
     all_levels = analysis.supports + analysis.resistances
@@ -163,7 +164,7 @@ def draw_scheme_c(
             left=-width,
             color=colors["success"],
             alpha=0.75 if level.strength >= 3 else 0.55,
-            edgecolor="white",
+            edgecolor=colors["border"],
             linewidth=0.4,
         )
         ax_ladder.text(
@@ -184,7 +185,7 @@ def draw_scheme_c(
             left=0,
             color=colors["danger"],
             alpha=0.75 if level.strength >= 3 else 0.55,
-            edgecolor="white",
+            edgecolor=colors["border"],
             linewidth=0.4,
         )
         ax_ladder.text(
@@ -207,7 +208,7 @@ def draw_scheme_c(
         va="top",
         fontsize=8,
         color=colors["warning"],
-        bbox={"boxstyle": "round,pad=0.25", "facecolor": colors["surface"], "edgecolor": colors["border"], "alpha": 0.9},
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": colors["surface_elevated"], "edgecolor": colors["border"], "alpha": 0.95},
     )
     ax_ladder.set_title("落點階梯", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
     ax_ladder.set_xlim(-4.2, 4.2)

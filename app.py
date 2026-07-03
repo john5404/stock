@@ -30,28 +30,31 @@ from landing_analysis.scheme_c_charts import draw_empty_scheme_c, draw_scheme_c
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
 COLORS = {
-    "bg": "#edf0f5",
-    "surface": "#ffffff",
-    "sidebar": "#131820",
-    "sidebar_elevated": "#1a2130",
-    "sidebar_border": "#2a3448",
-    "accent": "#3b82f6",
-    "accent_dark": "#2563eb",
-    "accent_soft": "#dbeafe",
-    "text": "#0f172a",
-    "text_inverse": "#f1f5f9",
-    "muted": "#64748b",
-    "muted_light": "#94a3b8",
-    "border": "#e2e8f0",
-    "success": "#16a34a",
-    "success_soft": "#dcfce7",
-    "danger": "#dc2626",
-    "danger_soft": "#fee2e2",
-    "strength_high": "#f87171",
-    "warning": "#d97706",
-    "chart_bg": "#fafbfc",
-    "tree_header": "#f8fafc",
-    "tree_zebra": "#f1f5f9",
+    # Trading-dashboard dark palette (TradingView / CustomTkinter inspired)
+    "bg": "#0b0f14",
+    "surface": "#131a24",
+    "surface_elevated": "#1a2332",
+    "sidebar": "#0f1419",
+    "sidebar_elevated": "#161d28",
+    "sidebar_border": "#2a3544",
+    "accent": "#3d8bfd",
+    "accent_dark": "#2f6fd6",
+    "accent_soft": "#1a2f4d",
+    "text": "#e6edf3",
+    "text_inverse": "#e6edf3",
+    "muted": "#8b949e",
+    "muted_light": "#6e7681",
+    "border": "#2d3b4f",
+    "success": "#26a69a",
+    "success_soft": "#152a28",
+    "danger": "#ef5350",
+    "danger_soft": "#2a1818",
+    "strength_high": "#c62828",
+    "warning": "#ffa726",
+    "chart_bg": "#0d1117",
+    "tree_header": "#161b22",
+    "tree_zebra": "#111820",
+    "grid": "#21262d",
 }
 
 FONTS = {
@@ -133,8 +136,8 @@ class LandingAnalysisApp(tk.Tk):
         )
         style.map(
             "TNotebook.Tab",
-            background=[("selected", COLORS["surface"]), ("active", COLORS["surface"])],
-            foreground=[("selected", COLORS["accent_dark"]), ("active", COLORS["text"])],
+            background=[("selected", COLORS["surface_elevated"]), ("active", COLORS["surface"])],
+            foreground=[("selected", COLORS["accent"]), ("active", COLORS["text"])],
             expand=[("selected", (1, 1, 1, 0))],
         )
 
@@ -194,11 +197,18 @@ class LandingAnalysisApp(tk.Tk):
         style.map(
             "Custom.Treeview",
             background=[("selected", COLORS["accent_soft"])],
-            foreground=[("selected", COLORS["accent_dark"])],
+            foreground=[("selected", COLORS["text"])],
         )
 
         style.configure(
             "Vertical.TScrollbar",
+            background=COLORS["border"],
+            troughcolor=COLORS["bg"],
+            bordercolor=COLORS["bg"],
+            arrowcolor=COLORS["muted"],
+        )
+        style.configure(
+            "Horizontal.TScrollbar",
             background=COLORS["border"],
             troughcolor=COLORS["bg"],
             bordercolor=COLORS["bg"],
@@ -213,8 +223,9 @@ class LandingAnalysisApp(tk.Tk):
                 "axes.labelcolor": COLORS["muted"],
                 "xtick.color": COLORS["muted"],
                 "ytick.color": COLORS["muted"],
-                "grid.color": COLORS["border"],
-                "grid.alpha": 0.55,
+                "grid.color": COLORS["grid"],
+                "grid.alpha": 0.45,
+                "text.color": COLORS["text"],
                 "font.sans-serif": ["Microsoft JhengHei", "Microsoft YaHei", "Segoe UI", "DejaVu Sans"],
                 "axes.unicode_minus": False,
                 "axes.titlesize": 12,
@@ -325,7 +336,7 @@ class LandingAnalysisApp(tk.Tk):
             header_inner,
             textvariable=self.header_ticker_var,
             bg=COLORS["accent_soft"],
-            fg=COLORS["accent_dark"],
+            fg=COLORS["accent"],
             font=FONTS["body_bold"],
             padx=14,
             pady=6,
@@ -1016,7 +1027,7 @@ class LandingAnalysisApp(tk.Tk):
                     color=COLORS["success"],
                     s=70,
                     zorder=5,
-                    edgecolors="white",
+                    edgecolors=COLORS["surface"],
                     linewidths=0.8,
                 )
                 self.ax.scatter(
@@ -1025,7 +1036,7 @@ class LandingAnalysisApp(tk.Tk):
                     color=COLORS["danger"],
                     s=70,
                     zorder=5,
-                    edgecolors="white",
+                    edgecolors=COLORS["surface"],
                     linewidths=0.8,
                 )
                 self.ax.plot(
@@ -1043,7 +1054,8 @@ class LandingAnalysisApp(tk.Tk):
             Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["success"], markersize=8, label="Buy"),
             Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["danger"], markersize=8, label="Sell"),
         ]
-        self.ax.legend(handles=legend_items, loc="upper left", frameon=True, fancybox=True, framealpha=0.95)
+        self.ax.legend(handles=legend_items, loc="upper left", frameon=True, fancybox=True, framealpha=0.95,
+                       facecolor=COLORS["surface"], edgecolor=COLORS["border"], labelcolor=COLORS["text"])
         self.ax.set_title(f"{self.ticker}  ·  {self.strategy_var.get()}", color=COLORS["text"], pad=12)
         self.ax.grid(True, alpha=0.35)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
