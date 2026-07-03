@@ -57,6 +57,7 @@ def test_ui_flow():
     assert_true(len(root.analysis.resistances) > 0, "resist levels")
     assert_true(root.levels_canvas is not None, "scheme C canvas")
     assert_true(root._levels_default_ylim is not None, "zoom defaults captured")
+    assert_true(len(root.level_tree.get_children()) > 0, "level detail table")
     assert_true("落點分析完成" in root.status_var.get(), "analysis status")
 
   def step_backtest_rolling():
@@ -106,6 +107,16 @@ def test_ui_flow():
     root._on_ticker_search_select()
     assert_true(root.custom_ticker_var.get().strip(), "preset sets ticker")
 
+  def step_preserve_ticker_on_strategy_change():
+    root.ticker_search_var.set("AAPL")
+    root.custom_ticker_var.set("AAPL")
+    root.strategy_var.set("設備股")
+    root._apply_strategy_template("設備股")
+    assert_true(root.custom_ticker_var.get() == "AAPL", "ticker preserved across strategy")
+    root.strategy_var.set("熱門股")
+    root._apply_strategy_template("熱門股")
+    assert_true(root.custom_ticker_var.get() == "AAPL", "ticker preserved on second switch")
+
   def step_tw_market_search():
     root.ticker_search_var.set("台積")
     root._on_ticker_search_key()
@@ -144,6 +155,7 @@ def test_ui_flow():
   run_step("strategy_templates", step_strategy_templates)
   run_step("custom_params", step_custom_params)
   run_step("ticker_preset", step_ticker_preset)
+  run_step("preserve_ticker", step_preserve_ticker_on_strategy_change)
   run_step("tw_market_search", step_tw_market_search)
   run_step("chart_draw", step_chart_draw)
 

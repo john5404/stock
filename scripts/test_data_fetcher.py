@@ -29,6 +29,11 @@ class DataFetcherTests(unittest.TestCase):
         self.assertEqual(detect_market_from_input("2330.TW"), "台股")
         self.assertEqual(detect_market_from_input("8299.TWO"), "台股")
 
+    def test_detect_korean_digits_as_us(self):
+        self.assertEqual(detect_market_from_input("005930"), "美股")
+        self.assertEqual(detect_market_from_input("000660"), "美股")
+        self.assertEqual(detect_market_from_input("005930.KS"), "美股")
+
     def test_normalize_tw_digits(self):
         self.assertEqual(normalize_ticker_input("2330"), "2330.TW")
         self.assertEqual(normalize_ticker_input("2330", "台股"), "2330.TW")
@@ -36,6 +41,10 @@ class DataFetcherTests(unittest.TestCase):
     def test_normalize_us_symbol(self):
         self.assertEqual(normalize_ticker_input("AAPL"), "AAPL")
         self.assertEqual(normalize_ticker_input("aapl"), "AAPL")
+
+    def test_normalize_korean_digits(self):
+        self.assertEqual(normalize_ticker_input("005930"), "005930.KS")
+        self.assertEqual(normalize_ticker_input("005930.KS"), "005930.KS")
 
 
 if __name__ == "__main__":

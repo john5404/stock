@@ -21,7 +21,7 @@ from landing_analysis.env_config import load_local_env
 
 load_local_env()
 
-from landing_analysis.analyzer import LandingAnalyzer
+from landing_analysis.analyzer import LandingAnalyzer, LevelCluster
 from landing_analysis.backtest import BacktestEngine
 from landing_analysis.data_fetcher import (
     detect_market_from_input,
@@ -121,6 +121,7 @@ class LandingAnalysisApp(tk.Tk):
         self._price_pan_ref: tuple[float, float, tuple[float, float], tuple[float, float]] | None = None
         self._action_buttons: list[tk.Button] = []
         self._busy = False
+        self._inst_note = ""
 
         self._setup_theme()
         self._build_ui()
@@ -647,7 +648,7 @@ class LandingAnalysisApp(tk.Tk):
         self.chart_frame = ttk.Frame(self.notebook, style="Surface.TFrame")
         self.notebook.add(self.levels_frame, text="  落點分析  ")
         self.notebook.add(self.backtest_frame, text="  回測結果  ")
-        self.notebook.add(self.chart_frame, text="  圖表  ")
+        self.notebook.add(self.chart_frame, text="  交易走勢  ")
 
         self._build_levels_tab()
         self._build_backtest_tab()
@@ -805,12 +806,43 @@ class LandingAnalysisApp(tk.Tk):
                 catalog[label] = symbol
         return catalog
 
-    def _refresh_ticker_options(self, catalog: dict[str, str] | None = None):
+    def _refresh_ticker_options(self, catalog: dict[str, str] | None = None, *, preserve: bool = True):
         if catalog is None:
             catalog = self._catalog_for_query(self.ticker_search_var.get())
         self._ticker_catalog = catalog
         self._ticker_search_values = list(catalog.keys())
         self.ticker_search_combo["values"] = self._ticker_search_values
+
+        prev_symbol = self.custom_ticker_var.get().strip()
+        prev_query = self.ticker_search_var.get().strip()
+
+        if preserve and (prev_symbol or prev_query):
+            if prev_symbol:
+                for label, symbol in catalog.items():
+                    if symbol.upper() == prev_symbol.upper():
+                        self.ticker_search_var.set(label)
+                        self.custom_ticker_var.set(symbol)
+                        self._update_market_badge(label)
+                        return
+            if prev_query in catalog:
+                self.ticker_search_var.set(prev_query)
+                self.custom_ticker_var.set(catalog[prev_query])
+                self._update_market_badge(prev_query)
+                return
+            for label, symbol in catalog.items():
+                if prev_query and (
+                    prev_query.lower() in label.lower() or prev_query.upper() == symbol.upper()
+                ):
+                    self.ticker_search_var.set(label)
+                    self.custom_ticker_var.set(symbol)
+                    self._update_market_badge(label)
+                    return
+            resolved = prev_symbol or normalize_ticker_input(prev_query)
+            self.ticker_search_var.set(prev_query or prev_symbol)
+            self.custom_ticker_var.set(resolved)
+            self._update_market_badge(prev_query or prev_symbol)
+            return
+
         if catalog:
             first_label = next(iter(catalog))
             self.ticker_search_var.set(first_label)
@@ -896,13 +928,70 @@ class LandingAnalysisApp(tk.Tk):
         )
         reset_btn.pack(side=tk.RIGHT)
 
+        levels_body = tk.Frame(self.levels_frame, bg=COLORS["bg"])
+        levels_body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
+
         chart_card = tk.Frame(
-            self.levels_frame,
+            levels_body,
             bg=COLORS["surface"],
             highlightbackground=COLORS["border"],
             highlightthickness=1,
         )
-        chart_card.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        chart_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        table_card = tk.Frame(
+            levels_body,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        table_card.pack(fill=tk.X)
+
+        table_header = tk.Frame(table_card, bg=COLORS["surface"])
+        table_header.pack(fill=tk.X, padx=12, pady=(10, 4))
+        tk.Label(
+            table_header,
+            text="落點明細",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            font=FONTS["section"],
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            table_header,
+            text="價位 · 強度 · 偵測方法",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        table_inner = tk.Frame(table_card, bg=COLORS["surface"])
+        table_inner.pack(fill=tk.X, padx=8, pady=(0, 8))
+
+        level_cols = ("kind", "price", "strength", "methods")
+        self.level_tree = ttk.Treeview(
+            table_inner,
+            columns=level_cols,
+            show="headings",
+            height=6,
+            style="Custom.Treeview",
+        )
+        level_headers = {
+            "kind": "類型",
+            "price": "價位",
+            "strength": "強度",
+            "methods": "方法",
+        }
+        level_widths = {"kind": 70, "price": 90, "strength": 70, "methods": 520}
+        for col in level_cols:
+            self.level_tree.heading(col, text=level_headers[col])
+            anchor = tk.CENTER if col != "methods" else tk.W
+            self.level_tree.column(col, width=level_widths[col], anchor=anchor)
+        self.level_tree.tag_configure("support", foreground=COLORS["success"])
+        self.level_tree.tag_configure("resistance", foreground=COLORS["danger"])
+        self.level_tree.tag_configure("even", background=COLORS["tree_zebra"])
+        self.level_tree.pack(fill=tk.X)
+
+        chart_card_inner = chart_card
 
         self.levels_fig = plt.figure(figsize=(11, 8.2), dpi=100)
         self.levels_fig.patch.set_facecolor(COLORS["surface"])
@@ -920,7 +1009,7 @@ class LandingAnalysisApp(tk.Tk):
         self.ax_volume_profile = self.levels_fig.add_subplot(grid[1, 1])
         self.ax_institutional = self.levels_fig.add_subplot(grid[2, :])
 
-        self.levels_canvas = FigureCanvasTkAgg(self.levels_fig, master=chart_card)
+        self.levels_canvas = FigureCanvasTkAgg(self.levels_fig, master=chart_card_inner)
         self.levels_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         self._levels_scroll_cid = self.levels_canvas.mpl_connect("scroll_event", self._on_levels_scroll)
         self._levels_click_cid = self.levels_canvas.mpl_connect("button_press_event", self._on_levels_click)
@@ -995,6 +1084,16 @@ class LandingAnalysisApp(tk.Tk):
         self.trade_tree.pack(fill=tk.BOTH, expand=True)
 
     def _build_chart_tab(self):
+        toolbar = tk.Frame(self.chart_frame, bg=COLORS["bg"])
+        toolbar.pack(fill=tk.X, padx=12, pady=(12, 0))
+        tk.Label(
+            toolbar,
+            text="近 180 日收盤 · 均線 · 支撐阻力 · 回測買賣點",
+            bg=COLORS["bg"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(side=tk.LEFT)
+
         chart_card = tk.Frame(
             self.chart_frame,
             bg=COLORS["surface"],
@@ -1229,6 +1328,7 @@ class LandingAnalysisApp(tk.Tk):
         self.df = payload["df"]
         self.df_enriched = payload["df_enriched"]
         self.df_institutional = payload["df_institutional"]
+        self._inst_note = payload.get("inst_note", "")
         start, end = self.df.index[0].date(), self.df.index[-1].date()
         last = self.df["Close"].iloc[-1]
         self.summary_var.set(
@@ -1236,30 +1336,34 @@ class LandingAnalysisApp(tk.Tk):
             f"Ticker: {self.ticker}\n"
             f"資料: {start} ~ {end}\n"
             f"筆數: {len(self.df)}\n"
-            f"最新收盤: {last:,.2f}{payload['inst_note']}"
+            f"最新收盤: {last:,.2f}{self._inst_note}"
         )
         self._set_status(f"已載入 {self.ticker}，共 {len(self.df)} 筆")
         self._draw_price_chart()
-        self._set_busy(False)
-        if run_analysis_after:
-            self.run_analysis()
-        if on_complete:
-            on_complete()
+        try:
+            if run_analysis_after:
+                self.run_analysis(manage_busy=False)
+            if on_complete:
+                on_complete()
+        finally:
+            self._set_busy(False)
 
     def _on_load_error(self, exc: Exception):
         messagebox.showerror("載入失敗", str(exc))
         self._set_status("載入失敗", tone="error")
         self._set_busy(False)
 
-    def run_analysis(self):
-        if self._busy:
+    def run_analysis(self, *, manage_busy: bool = True):
+        if manage_busy and self._busy:
             return
         chart_df = self.df_enriched if self.df_enriched is not None else self.df
         if chart_df is None:
             messagebox.showwarning("提示", "請先載入資料")
             return
         try:
-            self._set_busy(True)
+            if manage_busy:
+                self._set_busy(True)
+            self._set_status("正在分析落點 ...", tone="warn")
             self.analysis = self.analyzer.analyze(chart_df, self.ticker, self.lookback_var.get())
             self._populate_levels()
             self._draw_price_chart()
@@ -1269,17 +1373,20 @@ class LandingAnalysisApp(tk.Tk):
             messagebox.showerror("分析失敗", str(exc))
             self._set_status("分析失敗", tone="error")
         finally:
-            self._set_busy(False)
+            if manage_busy:
+                self._set_busy(False)
 
-    def run_backtest(self):
-        if self._busy:
+    def run_backtest(self, *, manage_busy: bool = True):
+        if manage_busy and self._busy:
             return
         chart_df = self.df_enriched if self.df_enriched is not None else self.df
         if chart_df is None:
             messagebox.showwarning("提示", "請先載入資料")
             return
         try:
-            self._set_busy(True)
+            if manage_busy:
+                self._set_busy(True)
+            self._set_status("正在回測 ...", tone="warn")
             self.engine = BacktestEngine(self._build_config_from_ui())
             lookback = self.lookback_var.get()
             mode = self._backtest_mode_code()
@@ -1296,16 +1403,19 @@ class LandingAnalysisApp(tk.Tk):
             messagebox.showerror("回測失敗", str(exc))
             self._set_status("回測失敗", tone="error")
         finally:
-            self._set_busy(False)
+            if manage_busy:
+                self._set_busy(False)
 
     def run_all(self):
-        self.load_data(on_complete=self.run_backtest, run_analysis_after=True)
+        self.load_data(on_complete=lambda: self.run_backtest(manage_busy=False), run_analysis_after=True)
 
     def _populate_levels(self):
         if not self.analysis:
             self._draw_empty_levels_chart()
+            self._populate_level_table()
             return
         current = self.analysis.current_price
+        inst_suffix = self._inst_note or ""
         self.summary_var.set(
             f"模板: {self.strategy_var.get()}\n"
             f"Ticker: {self.ticker}\n"
@@ -1313,9 +1423,36 @@ class LandingAnalysisApp(tk.Tk):
             f"現價: {current:,.2f}\n"
             f"支撐: {len(self.analysis.supports)}  ·  阻力: {len(self.analysis.resistances)}\n"
             f"波段: {self.analysis.swing_low:,.2f} ~ {self.analysis.swing_high:,.2f}\n"
-            f"ATR: {self.analysis.atr:,.2f}"
+            f"ATR: {self.analysis.atr:,.2f}{inst_suffix}"
         )
+        self._populate_level_table()
         self._draw_levels_scheme_c()
+
+    def _populate_level_table(self):
+        for item in self.level_tree.get_children():
+            self.level_tree.delete(item)
+        if not self.analysis:
+            return
+        rows: list[tuple[str, LevelCluster]] = []
+        for level in self.analysis.supports:
+            rows.append(("支撐", level))
+        for level in self.analysis.resistances:
+            rows.append(("阻力", level))
+        rows.sort(key=lambda row: row[1].price, reverse=True)
+        for idx, (kind, level) in enumerate(rows):
+            tag = "support" if kind == "支撐" else "resistance"
+            tags = (tag, "even") if idx % 2 else (tag,)
+            self.level_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    kind,
+                    f"{level.price:,.2f}",
+                    level.stars,
+                    " · ".join(level.methods),
+                ),
+                tags=tags,
+            )
 
     def _populate_backtest(self):
         for item in self.trade_tree.get_children():
@@ -1356,11 +1493,11 @@ class LandingAnalysisApp(tk.Tk):
     def _draw_empty_chart(self):
         self.ax.clear()
         self.ax.set_facecolor(COLORS["chart_bg"])
-        self.ax.set_title("請載入資料後顯示圖表", color=COLORS["muted"], pad=12)
+        self.ax.set_title("交易走勢", color=COLORS["muted"], pad=12)
         self.ax.text(
             0.5,
             0.5,
-            "載入股票資料後，這裡會顯示價格走勢、均線與買賣點",
+            "載入資料並執行回測後，這裡會顯示近 180 日走勢與買賣點",
             transform=self.ax.transAxes,
             ha="center",
             va="center",

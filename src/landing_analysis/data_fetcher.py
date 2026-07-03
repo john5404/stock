@@ -62,10 +62,13 @@ def detect_market_from_input(raw: str) -> str:
     upper = text.upper()
     if upper.endswith(".TW") or upper.endswith(".TWO"):
         return "台股"
+    if upper.endswith(".KS") or upper.endswith(".KQ"):
+        return "美股"
     if _CJK_RE.search(text):
         return "台股"
     if text.isdigit():
-        return "台股"
+        # Taiwan listings are typically 4 digits; 5+ digits are treated as US/KR symbols.
+        return "台股" if len(text) <= 4 else "美股"
     return "美股"
 
 
@@ -85,6 +88,8 @@ def normalize_ticker_input(raw: str, market: str | None = None) -> str:
     mkt = market or detect_market_from_input(raw)
     if mkt == "台股" and text.isdigit():
         return f"{text}.TW"
+    if mkt == "美股" and text.isdigit() and len(text) >= 5:
+        return f"{text}.KS"
     return text
 
 
