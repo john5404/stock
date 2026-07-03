@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yfinance as yf
+import pandas as pd
 
 from .data_fetcher import detect_market_from_input, normalize_ticker_input
 
@@ -27,10 +28,13 @@ US_NAME_MAP: dict[str, str] = {
     "GOOGLE": "GOOGL",
     "GOOG": "GOOGL",
     "DRAM-ETF": "DRAM",
+    "DRAM": "DRAM",
     "FACEBOOK": "META",
+    "MUU": "MUU",
 }
 
 QUOTE_CACHE_MS = 5 * 60 * 1000
+QUOTE_POLL_MS = 5 * 60 * 1000
 _quote_cache: dict[str, object] = {"key": "", "data": {}, "at": 0.0}
 _symbol_cache: dict[str, str | None] = {}
 
@@ -319,24 +323,102 @@ def _search_yahoo_symbol(market: str, name: str) -> str | None:
     return quotes[0]["symbol"]
 
 
-def _chart_price(symbol: str) -> float | None:
-    try:
-        ticker = yf.Ticker(symbol)
-        price = getattr(ticker.fast_info, "last_price", None)
-        if price is not None:
-            return float(price)
-    except Exception:
-        pass
-    try:
-        hist = yf.download(symbol, period="5d", progress=False, auto_adjust=True)
-        if hist is not None and not hist.empty:
-            col = "Close"
-            if isinstance(hist.columns, __import__("pandas").MultiIndex):
-                col = hist.columns[0]
-            return float(hist[col].iloc[-1])
-    except Exception:
+def _chart_price_yahoo_api(symbol: str) -> float | None:
+    import json
+    import urllib.parse
+    import urllib.request
+
+    url = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/"
+        + urllib.parse.quote(symbol)
+        + "?interval=1d&range=5d"
+    )
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+    )
+    with urllib.request.urlopen(req, timeout=12) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    results = payload.get("chart", {}).get("result") or []
+    if not results:
         return None
+    meta = results[0].get("meta", {})
+    price = meta.get("regularMarketPrice")
+    if price is not None:
+        return float(price)
+    quotes = results[0].get("indicators", {}).get("quote", [{}])
+    if quotes:
+        closes = [c for c in quotes[0].get("close", []) if c is not None]
+        if closes:
+            return float(closes[-1])
     return None
+
+
+def _chart_price_yfinance(symbol: str) -> float | None:
+    ticker = yf.Ticker(symbol)
+    price = getattr(ticker.fast_info, "last_price", None)
+    if price is not None:
+        return float(price)
+    hist = yf.download(symbol, period="5d", progress=False, auto_adjust=True, threads=False)
+    if hist is None or hist.empty:
+        return None
+    if isinstance(hist.columns, pd.MultiIndex):
+        close = hist["Close"]
+        if isinstance(close, pd.DataFrame):
+            series = close.iloc[:, 0]
+        else:
+            series = close
+    else:
+        series = hist["Close"]
+    return float(series.iloc[-1])
+
+
+def _chart_price(symbol: str) -> float | None:
+    for fetcher in (_chart_price_yahoo_api, _chart_price_yfinance):
+        try:
+            price = fetcher(symbol)
+            if price is not None:
+                return price
+        except Exception:
+            continue
+    return None
+
+
+def _batch_prices(symbols: list[str]) -> dict[str, float]:
+    unique = list(dict.fromkeys(symbols))
+    prices: dict[str, float] = {}
+    if not unique:
+        return prices
+    if len(unique) > 1:
+        try:
+            data = yf.download(
+                unique,
+                period="5d",
+                progress=False,
+                auto_adjust=True,
+                threads=True,
+                group_by="column",
+            )
+            if data is not None and not data.empty:
+                if isinstance(data.columns, pd.MultiIndex):
+                    for sym in unique:
+                        if sym not in data.columns.get_level_values(1,):
+                            continue
+                        closes = data["Close", sym].dropna()
+                        if not closes.empty:
+                            prices[sym] = float(closes.iloc[-1])
+                elif len(unique) == 1:
+                    closes = data["Close"].dropna()
+                    if not closes.empty:
+                        prices[unique[0]] = float(closes.iloc[-1])
+        except Exception:
+            pass
+    for sym in unique:
+        if sym not in prices:
+            price = _chart_price(sym)
+            if price is not None:
+                prices[sym] = price
+    return prices
 
 
 def resolve_symbol(market: str, name: str) -> str | None:
@@ -416,8 +498,10 @@ def fetch_quotes(
         return dict(_quote_cache["data"])
 
     quotes: dict[str, dict[str, float | str]] = {}
+    symbol_list = [s for _, s in requests]
+    prices = _batch_prices(symbol_list)
     for key, symbol in requests:
-        price = _chart_price(symbol)
+        price = prices.get(symbol)
         if price is not None:
             quotes[key] = {"price": price, "symbol": symbol}
 

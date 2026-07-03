@@ -42,6 +42,7 @@ from landing_analysis.scheme_c_charts import (
 from landing_analysis.portfolio_store import (
     PortfolioRow,
     PortfolioSection,
+    QUOTE_POLL_MS,
     apply_quotes,
     calc_position_stats,
     calc_section,
@@ -140,6 +141,8 @@ class LandingAnalysisApp(tk.Tk):
         self._portfolio_sections: list[PortfolioSection] = []
         self._portfolio_quotes: dict[str, dict] = {}
         self._portfolio_path = default_portfolio_path()
+        self._portfolio_quote_after_id: str | None = None
+        self._portfolio_quote_fetching = False
 
         self._setup_theme()
         self._build_ui()
@@ -1675,10 +1678,11 @@ class LandingAnalysisApp(tk.Tk):
         if is_portfolio:
             self.portfolio_sidebar.pack(fill=tk.X)
             self.portfolio_main.pack(fill=tk.BOTH, expand=True)
-            self._load_portfolio_data()
-            self._render_portfolio()
+            self._load_portfolio_data(fetch_quotes=False)
+            self._start_portfolio_quote_poll()
             self._set_status("股市配比")
         else:
+            self._stop_portfolio_quote_poll()
             self.analysis_sidebar.pack(fill=tk.X)
             self.analysis_main.pack(fill=tk.BOTH, expand=True)
             self._set_status("就緒")
@@ -1821,6 +1825,18 @@ class LandingAnalysisApp(tk.Tk):
             head = tk.Frame(card, bg=COLORS["surface"])
             head.pack(fill=tk.X, padx=12, pady=(10, 6))
             tk.Label(head, text=title, bg=COLORS["surface"], fg=color, font=FONTS["section"]).pack(side=tk.LEFT)
+            tk.Button(
+                head,
+                text="＋ 新增列",
+                command=lambda sid=sec_id: self._portfolio_add_row(sid),
+                bg=COLORS["accent_soft"],
+                fg=COLORS["accent"],
+                relief=tk.FLAT,
+                font=FONTS["caption"],
+                padx=8,
+                pady=2,
+                cursor="hand2",
+            ).pack(side=tk.RIGHT)
 
             table_wrap = tk.Frame(card, bg=COLORS["surface"])
             table_wrap.pack(fill=tk.X, padx=8, pady=(0, 8))
@@ -1918,6 +1934,7 @@ class LandingAnalysisApp(tk.Tk):
         if sec is None or row_idx >= len(sec.rows):
             return
         ref = refs[row_idx]
+        prev_name = sec.rows[row_idx].name
         row = sec.rows[row_idx]
         row.name = ref["name"].get().strip()
         row.note = ref["note"].get().strip() if "note" in ref else ""
@@ -1933,6 +1950,8 @@ class LandingAnalysisApp(tk.Tk):
             row.cost = 0.0
         self._update_portfolio_section_display(sec_id)
         self._update_portfolio_summaries()
+        if row.name and row.name != prev_name:
+            self._refresh_portfolio_quotes(force=True)
 
     def _render_portfolio_rows(self, sec_id: str):
         sec = self._portfolio_section(sec_id)
@@ -2066,6 +2085,7 @@ class LandingAnalysisApp(tk.Tk):
 
             for widget in (name_entry, shares_entry, cost_entry):
                 widget.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
+            name_entry.bind("<Return>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
             if sec_id == "tw":
                 note_entry.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
             pos_combo.bind("<<ComboboxSelected>>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
@@ -2174,7 +2194,7 @@ class LandingAnalysisApp(tk.Tk):
             except ValueError:
                 pass
 
-    def _load_portfolio_data(self):
+    def _load_portfolio_data(self, *, fetch_quotes: bool = True):
         sections, budget = load_portfolio(self._portfolio_path)
         if sections:
             self._portfolio_sections = sections
@@ -2188,6 +2208,34 @@ class LandingAnalysisApp(tk.Tk):
         if us_sec is not None:
             self.portfolio_rate_var.set(str(us_sec.rate))
         self._render_portfolio()
+        if fetch_quotes:
+            self._refresh_portfolio_quotes(force=True)
+
+    def _start_portfolio_quote_poll(self):
+        self._stop_portfolio_quote_poll()
+        self._refresh_portfolio_quotes(force=True)
+        self._schedule_portfolio_quote_poll()
+
+    def _schedule_portfolio_quote_poll(self):
+        if self._portfolio_quote_after_id:
+            try:
+                self.after_cancel(self._portfolio_quote_after_id)
+            except tk.TclError:
+                pass
+        self._portfolio_quote_after_id = self.after(QUOTE_POLL_MS, self._portfolio_quote_tick)
+
+    def _portfolio_quote_tick(self):
+        if self.app_mode_var.get() != APP_MODES[1]:
+            return
+        self._refresh_portfolio_quotes(schedule_next=True)
+
+    def _stop_portfolio_quote_poll(self):
+        if self._portfolio_quote_after_id:
+            try:
+                self.after_cancel(self._portfolio_quote_after_id)
+            except tk.TclError:
+                pass
+            self._portfolio_quote_after_id = None
 
     def _save_portfolio(self):
         self._ensure_portfolio_sections()
@@ -2201,32 +2249,43 @@ class LandingAnalysisApp(tk.Tk):
         self._set_status(f"已儲存至 {self._portfolio_path.name}")
         self.portfolio_quote_status_var.set("✓ 已儲存配比")
 
-    def _refresh_portfolio_quotes(self):
-        if self._busy:
+    def _refresh_portfolio_quotes(self, *, force: bool = False, schedule_next: bool = False):
+        if self._portfolio_quote_fetching:
+            if schedule_next:
+                self._schedule_portfolio_quote_poll()
             return
         self._ensure_portfolio_sections()
-        self._set_busy(True)
+        for sec_id in ("tw", "us"):
+            self._sync_portfolio_rows_from_refs(sec_id)
+        self._portfolio_quote_fetching = True
         self.portfolio_quote_status_var.set("正在更新報價 ...")
 
         def worker():
             try:
-                quotes = fetch_quotes(self._portfolio_sections, force=True)
-                self.after(0, lambda: self._on_portfolio_quotes_ready(quotes, None))
+                quotes = fetch_quotes(self._portfolio_sections, force=force)
+                self.after(0, lambda: self._on_portfolio_quotes_ready(quotes, None, schedule_next))
             except Exception as exc:
-                self.after(0, lambda: self._on_portfolio_quotes_ready({}, exc))
+                self.after(0, lambda: self._on_portfolio_quotes_ready({}, exc, schedule_next))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_portfolio_quotes_ready(self, quotes: dict, error: Exception | None):
+    def _on_portfolio_quotes_ready(self, quotes: dict, error: Exception | None, schedule_next: bool = False):
         self._portfolio_quotes = quotes
+        self._portfolio_quote_fetching = False
         self._render_portfolio(rebuild=False)
-        self._set_busy(False)
         if error:
             self.portfolio_quote_status_var.set(f"報價更新失敗: {error}")
             self._set_status("報價更新失敗", tone="error")
         else:
-            self.portfolio_quote_status_var.set(f"報價已更新（{len(quotes)} 檔）")
-            self._set_status("報價已更新")
+            from datetime import datetime
+
+            now = datetime.now().strftime("%H:%M:%S")
+            self.portfolio_quote_status_var.set(
+                f"報價已更新 {now}（{len(quotes)} 檔）· 每 5 分鐘自動更新"
+            )
+            self._set_status(f"報價已更新（{len(quotes)} 檔）")
+        if schedule_next and self.app_mode_var.get() == APP_MODES[1]:
+            self._schedule_portfolio_quote_poll()
 
     def _render_portfolio(self, *, rebuild: bool = True):
         self._ensure_portfolio_sections()
