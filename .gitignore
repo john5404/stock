@@ -35,3 +35,4 @@ build/
 
 # Local market data cache
 data/*.csv
+data/institutional/*.csv

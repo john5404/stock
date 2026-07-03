@@ -21,6 +21,7 @@ from landing_analysis.backtest import BacktestEngine
 from landing_analysis.data_fetcher import (
     detect_market_from_input,
     fetch_stock_data,
+    fetch_tw_institutional_data,
     get_market_tickers,
     normalize_ticker_input,
     ticker_market,
@@ -96,6 +97,7 @@ class LandingAnalysisApp(tk.Tk):
         self.configure(bg=COLORS["bg"])
 
         self.df: pd.DataFrame | None = None
+        self.df_institutional: pd.DataFrame | None = None
         self.analysis = None
         self.backtest_result = None
         self.ticker = "MU"
@@ -1155,6 +1157,20 @@ class LandingAnalysisApp(tk.Tk):
                 self._period_code(),
                 lookback_days=self.lookback_var.get(),
             )
+            self.df_institutional = None
+            inst_note = ""
+            if ticker_market(self.ticker) == "台股":
+                try:
+                    self.df_institutional = fetch_tw_institutional_data(
+                        self.ticker,
+                        self._period_code(),
+                        lookback_days=self.lookback_var.get(),
+                    )
+                    if self.df_institutional is not None and not self.df_institutional.empty:
+                        last_net = self.df_institutional["total_net"].iloc[-1]
+                        inst_note = f"\n三大法人(最新): {last_net:+,.0f} 股"
+                except Exception as inst_exc:
+                    inst_note = f"\n三大法人: 未取得 ({inst_exc})"
             start, end = self.df.index[0].date(), self.df.index[-1].date()
             last = self.df["Close"].iloc[-1]
             self.summary_var.set(
@@ -1162,7 +1178,7 @@ class LandingAnalysisApp(tk.Tk):
                 f"Ticker: {self.ticker}\n"
                 f"資料: {start} ~ {end}\n"
                 f"筆數: {len(self.df)}\n"
-                f"最新收盤: {last:,.2f}"
+                f"最新收盤: {last:,.2f}{inst_note}"
             )
             self._set_status(f"已載入 {self.ticker}，共 {len(self.df)} 筆")
             self._draw_price_chart()

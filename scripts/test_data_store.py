@@ -4,7 +4,7 @@
 import sys
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -67,8 +67,8 @@ class DataStoreTests(unittest.TestCase):
         merged = merge_ohlcv(a, b)
         self.assertEqual(len(merged), 8)
 
-    @patch("landing_analysis.data_store.download_period")
-    def test_initial_fetch_writes_cache(self, mock_period):
+    @patch("landing_analysis.tw_market_data.download_tw_period")
+    def test_initial_fetch_writes_cache_tw(self, mock_period):
         full = make_ohlcv(date(2023, 1, 1), 400)
         mock_period.return_value = full
 
@@ -78,9 +78,9 @@ class DataStoreTests(unittest.TestCase):
         self.assertEqual(len(cached), 400)
         mock_period.assert_called_once()
 
-    @patch("landing_analysis.data_store.download_range")
-    @patch("landing_analysis.data_store.download_period")
-    def test_incremental_fetch_only_gets_new_dates(self, mock_period, mock_range):
+    @patch("landing_analysis.tw_market_data.download_tw_range")
+    @patch("landing_analysis.tw_market_data.download_tw_period")
+    def test_incremental_fetch_only_gets_new_dates_tw(self, mock_period, mock_range):
         full = make_ohlcv(date(2022, 1, 1), 700)
         existing = full[full.index <= pd.Timestamp("2024-07-03")]
         path = cache_path(self.data_dir, "2330.TW")
@@ -109,8 +109,8 @@ class DataStoreTests(unittest.TestCase):
             sliced = slice_for_period(df, "12mo", lookback)
             self.assertGreaterEqual(len(sliced), lookback + 5)
 
-    @patch("landing_analysis.data_store.download_period")
-    def test_get_stock_data_reads_from_cache_file(self, mock_period):
+    @patch("landing_analysis.tw_market_data.download_tw_period")
+    def test_get_stock_data_reads_from_cache_file_tw(self, mock_period):
         full = make_ohlcv(date(2022, 1, 1), 700)
         mock_period.return_value = full
 
@@ -123,8 +123,8 @@ class DataStoreTests(unittest.TestCase):
         mock_period.assert_not_called()
         self.assertEqual(len(out), len(out2))
 
-    @patch("landing_analysis.data_store.download_period")
-    def test_backtest_compatible_with_cached_data(self, mock_period):
+    @patch("landing_analysis.us_market_data.download_us_period")
+    def test_backtest_compatible_with_cached_data_us(self, mock_period):
         full = make_ohlcv(date(2022, 1, 1), 700)
         mock_period.return_value = full
         engine = BacktestEngine(get_template("設備股"))

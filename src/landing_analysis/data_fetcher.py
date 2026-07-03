@@ -4,7 +4,10 @@ import re
 
 import pandas as pd
 
-from .data_store import DEFAULT_MAX_LOOKBACK, get_stock_data, normalize_df
+from .data_store import get_stock_data
+from .ohlcv_cache import DEFAULT_MAX_LOOKBACK, default_data_dir
+from .tw_institutional_store import get_tw_institutional_data
+from .tw_market_data import is_tw_ticker
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
@@ -95,3 +98,18 @@ def fetch_stock_data(
     lookback_days: int = DEFAULT_MAX_LOOKBACK,
 ) -> pd.DataFrame:
     return get_stock_data(ticker, period, lookback_days=lookback_days)
+
+
+def fetch_tw_institutional_data(
+    ticker: str,
+    period: str = "12mo",
+    lookback_days: int = DEFAULT_MAX_LOOKBACK,
+) -> pd.DataFrame:
+    if not is_tw_ticker(ticker):
+        raise ValueError(f"Institutional data is only available for Taiwan tickers: {ticker}")
+    return get_tw_institutional_data(
+        ticker,
+        period,
+        data_dir=default_data_dir(),
+        lookback_days=lookback_days,
+    )
