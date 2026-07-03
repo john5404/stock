@@ -15,7 +15,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from landing_analysis.analyzer import LandingAnalyzer
 from landing_analysis.data_store import get_stock_data
-from landing_analysis.scheme_c_charts import draw_empty_scheme_c, draw_scheme_c, volume_profile_data
+from landing_analysis.scheme_c_charts import (
+    decimals_for_price_span,
+    draw_empty_scheme_c,
+    draw_scheme_c,
+    format_price_value,
+    volume_profile_data,
+)
 
 
 COLORS = {
@@ -70,6 +76,12 @@ class SchemeCChartTests(unittest.TestCase):
         )
         self.assertTrue(ax_price.lines or ax_price.collections)
         plt.close(fig)
+
+    def test_price_format_precision(self):
+        self.assertEqual(decimals_for_price_span(800), 0)
+        self.assertEqual(decimals_for_price_span(50), 2)
+        self.assertEqual(decimals_for_price_span(2), 4)
+        self.assertIn(".25", format_price_value(12.25, 10))
 
     def test_draw_empty_scheme_c(self):
         fig, axes = plt.subplots(1, 3, figsize=(9, 3))

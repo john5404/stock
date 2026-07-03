@@ -53,6 +53,7 @@ def test_ui_flow():
     assert_true(len(root.analysis.supports) > 0, "support levels")
     assert_true(len(root.analysis.resistances) > 0, "resist levels")
     assert_true(root.levels_canvas is not None, "scheme C canvas")
+    assert_true(root._levels_default_ylim is not None, "zoom defaults captured")
     assert_true("落點分析完成" in root.status_var.get(), "analysis status")
 
   def step_backtest_rolling():

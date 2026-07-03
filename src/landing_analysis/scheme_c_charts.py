@@ -6,9 +6,53 @@ import numpy as np
 import pandas as pd
 import matplotlib.dates as mdates
 from matplotlib.lines import Line2D
+from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 from .analyzer import AnalysisResult, LevelCluster
 from .indicators import add_indicators
+
+
+def decimals_for_price_span(span: float) -> int:
+    if span > 500:
+        return 0
+    if span > 100:
+        return 1
+    if span > 20:
+        return 2
+    if span > 5:
+        return 3
+    if span > 1:
+        return 4
+    return 5
+
+
+def format_price_value(value: float, span: float) -> str:
+    decimals = decimals_for_price_span(span)
+    return f"{value:,.{decimals}f}"
+
+
+def apply_price_axis_format(ax, colors: dict):
+    ymin, ymax = ax.get_ylim()
+    span = max(ymax - ymin, 1e-9)
+    decimals = decimals_for_price_span(span)
+
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=9, min_n_ticks=5))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _p: f"{v:,.{decimals}f}"))
+    ax.set_ylabel("價格", color=colors["text"], fontsize=10, labelpad=10)
+    ax.tick_params(axis="y", colors=colors["text"], labelsize=9, pad=4)
+    ax.tick_params(axis="x", colors=colors["muted"], labelsize=8)
+
+
+def refresh_level_price_labels(ax, colors: dict):
+    ymin, ymax = ax.get_ylim()
+    span = max(ymax - ymin, 1e-9)
+    for artist, price, color, stars in getattr(ax, "_level_labels", []):
+        artist.set_text(f"{format_price_value(price, span)} {stars}")
+        artist.set_color(color)
+    current_art = getattr(ax, "_current_price_label", None)
+    current_price = getattr(ax, "_current_price_value", None)
+    if current_art is not None and current_price is not None:
+        current_art.set_text(f"現價 {format_price_value(current_price, span)}")
 
 
 def volume_profile_data(df: pd.DataFrame, n_bins: int = 36) -> tuple[np.ndarray, np.ndarray]:
@@ -54,7 +98,7 @@ def draw_empty_scheme_c(fig, ax_price, ax_ladder, ax_vp, colors: dict):
     ax_price.text(
         0.5,
         0.5,
-        "載入資料後將顯示\n價格落點線圖 · 落點階梯 · 成交量分布",
+        "載入資料後將顯示\n價格落點線圖 · 落點階梯 · 成交量分布\n\n滾輪縮放 · 雙擊重置",
         transform=ax_price.transAxes,
         ha="center",
         va="center",
@@ -87,12 +131,20 @@ def draw_scheme_c(
     train = df.iloc[-lookback_days:].copy()
     vp_centers, vp_profile = volume_profile_data(train)
     current = analysis.current_price
+    all_levels = analysis.supports + analysis.resistances
+    y_min_data = min([plot_df["Close"].min(), current] + [lv.price for lv in all_levels])
+    y_max_data = max([plot_df["Close"].max(), current] + [lv.price for lv in all_levels])
+    y_pad = max((y_max_data - y_min_data) * 0.06, current * 0.01)
+    ax_price.set_ylim(y_min_data - y_pad, y_max_data + y_pad)
+    ax_price._level_labels = []
 
     # --- Price + landing lines ---
     dates = plot_df.index
     ax_price.plot(dates, plot_df["Close"], color=colors["accent_dark"], linewidth=2.0, label="Close", zorder=4)
     if plot_df["MA20"].notna().any():
         ax_price.plot(dates, plot_df["MA20"], color="#9a7a45", linewidth=1.1, alpha=0.7, label="MA20", zorder=3)
+
+    price_span = y_max_data - y_min_data + 2 * y_pad
 
     for level in analysis.supports:
         ax_price.axhline(
@@ -103,15 +155,19 @@ def draw_scheme_c(
             linewidth=_line_width(level.strength),
             zorder=2,
         )
-        ax_price.text(
-            dates[-1],
-            level.price,
-            f" {level.stars}",
+        label = ax_price.annotate(
+            f"{format_price_value(level.price, price_span)} {level.stars}",
+            xy=(1.0, level.price),
+            xycoords=("axes fraction", "data"),
+            xytext=(6, 0),
+            textcoords="offset points",
             color=colors["success"],
             fontsize=8,
             va="center",
             ha="left",
+            annotation_clip=False,
         )
+        ax_price._level_labels.append((label, level.price, colors["success"], level.stars))
     for level in analysis.resistances:
         ax_price.axhline(
             level.price,
@@ -121,17 +177,35 @@ def draw_scheme_c(
             linewidth=_line_width(level.strength),
             zorder=2,
         )
-        ax_price.text(
-            dates[-1],
-            level.price,
-            f" {level.stars}",
+        label = ax_price.annotate(
+            f"{format_price_value(level.price, price_span)} {level.stars}",
+            xy=(1.0, level.price),
+            xycoords=("axes fraction", "data"),
+            xytext=(6, 0),
+            textcoords="offset points",
             color=colors["danger"],
             fontsize=8,
             va="center",
             ha="left",
+            annotation_clip=False,
         )
+        ax_price._level_labels.append((label, level.price, colors["danger"], level.stars))
 
     ax_price.axhline(current, color=colors["warning"], linestyle=":", linewidth=1.2, alpha=0.9, zorder=5)
+    ax_price._current_price_label = ax_price.annotate(
+        f"現價 {format_price_value(current, price_span)}",
+        xy=(0.01, current),
+        xycoords=("axes fraction", "data"),
+        xytext=(0, 0),
+        textcoords="offset points",
+        color=colors["warning"],
+        fontsize=8,
+        va="bottom",
+        ha="left",
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": colors["surface_elevated"], "edgecolor": colors["border"], "alpha": 0.92},
+    )
+    ax_price._current_price_value = current
+    apply_price_axis_format(ax_price, colors)
     ax_price.set_title(
         f"{ticker} · {strategy_name} · 價格走勢 + 落點線",
         color=colors["text"],
@@ -150,7 +224,6 @@ def draw_scheme_c(
                     facecolor=colors["surface"], edgecolor=colors["border"], labelcolor=colors["text"])
 
     # --- Price ladder ---
-    all_levels = analysis.supports + analysis.resistances
     y_min, y_max = _price_band(all_levels, current)
     span = max(y_max - y_min, 1e-6)
     bar_h = span * 0.018
@@ -202,7 +275,7 @@ def draw_scheme_c(
     ax_ladder.text(
         0.02,
         0.98,
-        f"現價 {current:,.2f}",
+        f"現價 {format_price_value(current, y_max - y_min)}",
         transform=ax_ladder.transAxes,
         ha="left",
         va="top",
@@ -243,4 +316,4 @@ def draw_scheme_c(
     ax_vp.set_yticklabels([])
     ax_vp.tick_params(axis="x", labelsize=7)
 
-    fig.subplots_adjust(left=0.06, right=0.98, top=0.94, bottom=0.08, wspace=0.32, hspace=0.35)
+    fig.subplots_adjust(left=0.09, right=0.92, top=0.94, bottom=0.08, wspace=0.32, hspace=0.35)
