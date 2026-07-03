@@ -898,6 +898,39 @@ class LandingAnalysisApp(tk.Tk):
     def _on_ticker_preset(self, _event=None):
         self._on_ticker_search_select(_event)
 
+    def _build_level_mini_table(
+        self,
+        parent: tk.Frame,
+        *,
+        column: int,
+        title: str,
+        subtitle: str,
+        tag: str,
+        tag_color: str,
+    ) -> ttk.Treeview:
+        wrap = tk.Frame(parent, bg=COLORS["surface"])
+        wrap.grid(row=0, column=column, sticky="nsew", padx=(0, 6 if column == 0 else 0))
+
+        head = tk.Frame(wrap, bg=COLORS["surface"])
+        head.pack(fill=tk.X, padx=4, pady=(0, 4))
+        tk.Label(head, text=title, bg=COLORS["surface"], fg=tag_color, font=FONTS["body_bold"]).pack(side=tk.LEFT)
+        tk.Label(head, text=subtitle, bg=COLORS["surface"], fg=COLORS["muted"], font=FONTS["caption"]).pack(
+            side=tk.LEFT, padx=(8, 0)
+        )
+
+        cols = ("price", "strength", "methods")
+        tree = ttk.Treeview(wrap, columns=cols, show="headings", height=5, style="Custom.Treeview")
+        headers = {"price": "價位", "strength": "強度", "methods": "曲線來源"}
+        widths = {"price": 88, "strength": 56, "methods": 240}
+        for col in cols:
+            tree.heading(col, text=headers[col])
+            anchor = tk.CENTER if col != "methods" else tk.W
+            tree.column(col, width=widths[col], anchor=anchor, stretch=(col == "methods"))
+        tree.tag_configure(tag, foreground=tag_color)
+        tree.tag_configure("even", background=COLORS["tree_zebra"])
+        tree.pack(fill=tk.X, expand=True)
+        return tree
+
     def _build_levels_tab(self):
         toolbar = tk.Frame(self.levels_frame, bg=COLORS["bg"])
         toolbar.pack(fill=tk.X, padx=12, pady=(12, 0))
@@ -952,45 +985,33 @@ class LandingAnalysisApp(tk.Tk):
         table_header.pack(fill=tk.X, padx=12, pady=(10, 4))
         tk.Label(
             table_header,
-            text="落點明細",
+            text="落點一覽",
             bg=COLORS["surface"],
             fg=COLORS["text"],
             font=FONTS["section"],
         ).pack(side=tk.LEFT)
-        tk.Label(
-            table_header,
-            text="價位 · 強度 · 支撐曲線來源",
-            bg=COLORS["surface"],
-            fg=COLORS["muted"],
-            font=FONTS["caption"],
-        ).pack(side=tk.LEFT, padx=(10, 0))
 
-        table_inner = tk.Frame(table_card, bg=COLORS["surface"])
-        table_inner.pack(fill=tk.X, padx=8, pady=(0, 8))
+        tables_row = tk.Frame(table_card, bg=COLORS["surface"])
+        tables_row.pack(fill=tk.X, padx=8, pady=(0, 8))
+        tables_row.columnconfigure(0, weight=1)
+        tables_row.columnconfigure(1, weight=1)
 
-        level_cols = ("kind", "price", "strength", "methods")
-        self.level_tree = ttk.Treeview(
-            table_inner,
-            columns=level_cols,
-            show="headings",
-            height=6,
-            style="Custom.Treeview",
+        self.support_tree = self._build_level_mini_table(
+            tables_row,
+            column=0,
+            title="支撐價位",
+            subtitle="價位 · 強度 · 曲線來源",
+            tag="support",
+            tag_color=COLORS["success"],
         )
-        level_headers = {
-            "kind": "類型",
-            "price": "價位",
-            "strength": "強度",
-            "methods": "曲線來源",
-        }
-        level_widths = {"kind": 70, "price": 90, "strength": 70, "methods": 520}
-        for col in level_cols:
-            self.level_tree.heading(col, text=level_headers[col])
-            anchor = tk.CENTER if col != "methods" else tk.W
-            self.level_tree.column(col, width=level_widths[col], anchor=anchor)
-        self.level_tree.tag_configure("support", foreground=COLORS["success"])
-        self.level_tree.tag_configure("resistance", foreground=COLORS["danger"])
-        self.level_tree.tag_configure("even", background=COLORS["tree_zebra"])
-        self.level_tree.pack(fill=tk.X)
+        self.resistance_tree = self._build_level_mini_table(
+            tables_row,
+            column=1,
+            title="阻力價位",
+            subtitle="價位 · 強度 · 曲線來源",
+            tag="resistance",
+            tag_color=COLORS["danger"],
+        )
 
         chart_card_inner = chart_card
 
@@ -1430,30 +1451,29 @@ class LandingAnalysisApp(tk.Tk):
         self._draw_levels_scheme_c()
 
     def _populate_level_table(self):
-        for item in self.level_tree.get_children():
-            self.level_tree.delete(item)
+        for tree in (self.support_tree, self.resistance_tree):
+            for item in tree.get_children():
+                tree.delete(item)
         if not self.analysis:
             return
-        rows: list[tuple[str, LevelCluster]] = []
-        for level in self.analysis.supports:
-            rows.append(("支撐", level))
-        for level in self.analysis.resistances:
-            rows.append(("阻力", level))
-        rows.sort(key=lambda row: row[1].price, reverse=True)
-        for idx, (kind, level) in enumerate(rows):
-            tag = "support" if kind == "支撐" else "resistance"
-            tags = (tag, "even") if idx % 2 else (tag,)
-            self.level_tree.insert(
-                "",
-                tk.END,
-                values=(
-                    kind,
-                    f"{level.price:,.2f}",
-                    level.stars,
-                    format_methods_zh(level.methods),
-                ),
-                tags=tags,
-            )
+
+        def fill(tree: ttk.Treeview, levels: list[LevelCluster], tag: str):
+            ordered = sorted(levels, key=lambda lv: lv.price, reverse=True)
+            for idx, level in enumerate(ordered):
+                tags = (tag, "even") if idx % 2 else (tag,)
+                tree.insert(
+                    "",
+                    tk.END,
+                    values=(
+                        f"{level.price:,.2f}",
+                        level.stars,
+                        format_methods_zh(level.methods),
+                    ),
+                    tags=tags,
+                )
+
+        fill(self.support_tree, self.analysis.supports, "support")
+        fill(self.resistance_tree, self.analysis.resistances, "resistance")
 
     def _populate_backtest(self):
         for item in self.trade_tree.get_children():
