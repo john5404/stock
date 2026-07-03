@@ -31,6 +31,41 @@ def format_price_value(value: float, span: float) -> str:
     return f"{value:,.{decimals}f}"
 
 
+METHOD_LABELS_ZH: dict[str, str] = {
+    "Fib 38.2%": "斐波那契 38.2%",
+    "Fib 50.0%": "斐波那契 50%",
+    "Fib 61.8%": "斐波那契 61.8%",
+    "Bollinger Lower": "布林下軌",
+    "Bollinger Mid": "布林中軌",
+    "Bollinger Upper": "布林上軌",
+    "MA20": "MA20 均線",
+    "MA50": "MA50 均線",
+    "Volume S1": "量能分布 S1",
+    "Volume S2": "量能分布 S2",
+    "Volume S3": "量能分布 S3",
+    "Volume R1": "量能分布 R1",
+    "Volume R2": "量能分布 R2",
+    "Pivot S1": "樞軸 S1",
+    "Pivot S2": "樞軸 S2",
+    "Pivot R1": "樞軸 R1",
+    "Pivot R2": "樞軸 R2",
+    "Period Low": "區間低點",
+    "Period High": "區間高點",
+    "Psychological": "心理價位",
+}
+
+
+def format_methods_zh(methods: list[str]) -> str:
+    return " · ".join(METHOD_LABELS_ZH.get(name, name) for name in methods)
+
+
+def level_label_text(price: float, span: float, stars: str, methods: list[str], *, show_methods: bool) -> str:
+    head = f"{format_price_value(price, span)} {stars}"
+    if show_methods and methods:
+        return f"{head}\n{format_methods_zh(methods)}"
+    return head
+
+
 def apply_price_axis_format(ax, colors: dict):
     ymin, ymax = ax.get_ylim()
     span = max(ymax - ymin, 1e-9)
@@ -46,8 +81,10 @@ def apply_price_axis_format(ax, colors: dict):
 def refresh_level_price_labels(ax, colors: dict):
     ymin, ymax = ax.get_ylim()
     span = max(ymax - ymin, 1e-9)
-    for artist, price, color, stars in getattr(ax, "_level_labels", []):
-        artist.set_text(f"{format_price_value(price, span)} {stars}")
+    for artist, price, color, stars, methods_zh in getattr(ax, "_level_labels", []):
+        head = f"{format_price_value(price, span)} {stars}"
+        text = f"{head}\n{methods_zh}" if methods_zh else head
+        artist.set_text(text)
         artist.set_color(color)
     current_art = getattr(ax, "_current_price_label", None)
     current_price = getattr(ax, "_current_price_value", None)
@@ -288,19 +325,21 @@ def draw_scheme_c(
             linewidth=_line_width(level.strength),
             zorder=2,
         )
+        methods_zh = format_methods_zh(level.methods)
         label = ax_price.annotate(
-            f"{format_price_value(level.price, price_span)} {level.stars}",
-            xy=(1.0, level.price),
+            level_label_text(level.price, price_span, level.stars, level.methods, show_methods=True),
+            xy=(0.01, level.price),
             xycoords=("axes fraction", "data"),
-            xytext=(6, 0),
+            xytext=(4, -6),
             textcoords="offset points",
             color=colors["success"],
-            fontsize=8,
-            va="center",
+            fontsize=7,
+            va="top",
             ha="left",
             annotation_clip=False,
+            linespacing=0.95,
         )
-        ax_price._level_labels.append((label, level.price, colors["success"], level.stars))
+        ax_price._level_labels.append((label, level.price, colors["success"], level.stars, methods_zh))
     for level in analysis.resistances:
         ax_price.axhline(
             level.price,
@@ -311,7 +350,7 @@ def draw_scheme_c(
             zorder=2,
         )
         label = ax_price.annotate(
-            f"{format_price_value(level.price, price_span)} {level.stars}",
+            level_label_text(level.price, price_span, level.stars, level.methods, show_methods=False),
             xy=(1.0, level.price),
             xycoords=("axes fraction", "data"),
             xytext=(6, 0),
@@ -322,7 +361,7 @@ def draw_scheme_c(
             ha="left",
             annotation_clip=False,
         )
-        ax_price._level_labels.append((label, level.price, colors["danger"], level.stars))
+        ax_price._level_labels.append((label, level.price, colors["danger"], level.stars, ""))
 
     ax_price.axhline(current, color=colors["warning"], linestyle=":", linewidth=1.2, alpha=0.9, zorder=5)
     ax_price._current_price_label = ax_price.annotate(
@@ -381,6 +420,16 @@ def draw_scheme_c(
             va="center",
             fontsize=7,
             color=colors["success"],
+        )
+        ax_ladder.text(
+            -width - 0.15,
+            level.price - bar_h * 1.6,
+            format_methods_zh(level.methods),
+            ha="right",
+            va="top",
+            fontsize=6,
+            color=colors["success"],
+            alpha=0.9,
         )
     for level in analysis.resistances:
         width = level.strength * 0.9

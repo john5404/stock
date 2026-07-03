@@ -36,6 +36,7 @@ from landing_analysis.scheme_c_charts import (
     apply_price_axis_format,
     draw_empty_scheme_c,
     draw_scheme_c,
+    format_methods_zh,
     refresh_level_price_labels,
 )
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
@@ -958,7 +959,7 @@ class LandingAnalysisApp(tk.Tk):
         ).pack(side=tk.LEFT)
         tk.Label(
             table_header,
-            text="價位 · 強度 · 偵測方法",
+            text="價位 · 強度 · 支撐曲線來源",
             bg=COLORS["surface"],
             fg=COLORS["muted"],
             font=FONTS["caption"],
@@ -979,7 +980,7 @@ class LandingAnalysisApp(tk.Tk):
             "kind": "類型",
             "price": "價位",
             "strength": "強度",
-            "methods": "方法",
+            "methods": "曲線來源",
         }
         level_widths = {"kind": 70, "price": 90, "strength": 70, "methods": 520}
         for col in level_cols:
@@ -1449,7 +1450,7 @@ class LandingAnalysisApp(tk.Tk):
                     kind,
                     f"{level.price:,.2f}",
                     level.stars,
-                    " · ".join(level.methods),
+                    format_methods_zh(level.methods),
                 ),
                 tags=tags,
             )

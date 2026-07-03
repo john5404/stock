@@ -19,7 +19,9 @@ from landing_analysis.scheme_c_charts import (
     draw_empty_scheme_c,
     draw_institutional_chart,
     draw_scheme_c,
+    format_methods_zh,
     format_price_value,
+    level_label_text,
     volume_profile_data,
 )
 
@@ -125,6 +127,14 @@ class SchemeCChartTests(unittest.TestCase):
         self.assertEqual(decimals_for_price_span(50), 2)
         self.assertEqual(decimals_for_price_span(2), 4)
         self.assertIn(".25", format_price_value(12.25, 10))
+
+    def test_format_methods_zh(self):
+        text = format_methods_zh(["MA20", "Fib 38.2%"])
+        self.assertIn("MA20 均線", text)
+        self.assertIn("斐波那契", text)
+        label = level_label_text(100.5, 20, "★★", ["MA20"], show_methods=True)
+        self.assertIn("MA20 均線", label)
+        self.assertIn("\n", label)
 
     def test_draw_empty_scheme_c(self):
         fig = plt.figure(figsize=(10, 7))
