@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from .env_config import load_local_env
 from .ohlcv_cache import default_data_dir, period_required_calendar_days, to_date
 from .tw_market_data import tw_stock_id
 
@@ -40,6 +41,7 @@ def institutional_cache_path(data_dir: Path, stock_id: str) -> Path:
 
 
 def finmind_token() -> str:
+    load_local_env()
     token = os.environ.get("FINMIND_TOKEN", "").strip()
     if not token:
         raise ValueError(

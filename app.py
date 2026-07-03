@@ -16,6 +16,10 @@ from matplotlib.lines import Line2D
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from landing_analysis.env_config import load_local_env
+
+load_local_env()
+
 from landing_analysis.analyzer import LandingAnalyzer
 from landing_analysis.backtest import BacktestEngine
 from landing_analysis.data_fetcher import (
