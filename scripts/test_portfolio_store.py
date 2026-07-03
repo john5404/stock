@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Unit tests for portfolio allocation store."""
+
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from landing_analysis.portfolio_store import (
+    PortfolioRow,
+    PortfolioSection,
+    calc_section,
+    default_portfolio_path,
+    load_portfolio,
+    parse_markdown,
+    save_portfolio,
+    to_markdown,
+)
+
+
+class PortfolioStoreTests(unittest.TestCase):
+    def test_parse_sample_markdown(self):
+        md = default_portfolio_path()
+        if not md.exists():
+            self.skipTest("portfolio markdown missing")
+        sections, budget = load_portfolio(md)
+        self.assertGreaterEqual(len(sections), 1)
+        self.assertGreater(sum(len(sec.rows) for sec in sections), 0)
+
+    def test_roundtrip_markdown(self):
+        sections = [
+            PortfolioSection(
+                id="tw",
+                title="TW Stocks",
+                currency="TWD",
+                has_rate=False,
+                rows=[PortfolioRow(name="2330", note="台積電", position="long", shares=10, cost=100)],
+            ),
+            PortfolioSection(
+                id="us",
+                title="US Stocks",
+                currency="USD",
+                has_rate=True,
+                rate=32.0,
+                rows=[PortfolioRow(name="AAPL", position="long", shares=2, cost=150)],
+            ),
+        ]
+        md = to_markdown(sections, budget=1_000_000)
+        parsed = parse_markdown(md)
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0].rows[0].name, "2330")
+        self.assertEqual(parsed[1].rows[0].name, "AAPL")
+
+    def test_calc_section_weights(self):
+        sec = PortfolioSection(
+            id="tw",
+            title="TW Stocks",
+            currency="TWD",
+            has_rate=False,
+            rows=[
+                PortfolioRow(name="A", shares=10, cost=100),
+                PortfolioRow(name="B", shares=5, cost=200),
+            ],
+        )
+        calc = calc_section(sec)
+        self.assertAlmostEqual(calc.total, 2000)
+        self.assertAlmostEqual(sum(item.weight for item in calc.items), 100.0)
+
+    def test_save_and_load(self):
+        path = ROOT / "data" / "portfolio" / "_test_portfolio.md"
+        sections = [
+            PortfolioSection(
+                id="tw",
+                title="TW Stocks",
+                currency="TWD",
+                has_rate=False,
+                rows=[PortfolioRow(name="0050", shares=100, cost=50)],
+            )
+        ]
+        save_portfolio(path, sections, budget=500000)
+        loaded, budget = load_portfolio(path)
+        self.assertEqual(budget, 500000)
+        self.assertEqual(loaded[0].rows[0].name, "0050")
+        path.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

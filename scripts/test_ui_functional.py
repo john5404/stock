@@ -146,6 +146,18 @@ def test_ui_flow():
     assert_true(root.levels_canvas is not None, "levels canvas")
     assert_true(hasattr(root, "ax_institutional"), "institutional axis")
 
+  def step_portfolio_mode():
+    root.app_mode_var.set(app.APP_MODES[1])
+    root._on_app_mode_change()
+    root.update_idletasks()
+    assert_true(root.app_mode_var.get() == app.APP_MODES[1], "portfolio mode selected")
+    assert_true(len(root._portfolio_sections) >= 1, "portfolio sections loaded")
+    assert_true(root.portfolio_trees["tw"] is not None, "tw portfolio tree")
+    root.app_mode_var.set(app.APP_MODES[0])
+    root._on_app_mode_change()
+    root.update_idletasks()
+    assert_true(root.app_mode_var.get() == app.APP_MODES[0], "analysis mode restored")
+
   print("LandingAnalysisApp functional tests")
   run_step("init", step_init)
   run_step("load_data", step_load_data)
@@ -158,6 +170,7 @@ def test_ui_flow():
   run_step("ticker_preset", step_ticker_preset)
   run_step("preserve_ticker", step_preserve_ticker_on_strategy_change)
   run_step("tw_market_search", step_tw_market_search)
+  run_step("portfolio_mode", step_portfolio_mode)
   run_step("chart_draw", step_chart_draw)
 
   root.destroy()
