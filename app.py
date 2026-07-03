@@ -96,6 +96,7 @@ class LandingAnalysisApp(tk.Tk):
         self._ticker_search_values: list[str] = []
         self._levels_default_xlim: tuple[float, float] | None = None
         self._levels_default_ylim: tuple[float, float] | None = None
+        self._price_pan_ref: tuple[float, float, tuple[float, float], tuple[float, float]] | None = None
 
         self._setup_theme()
         self._build_ui()
@@ -743,6 +744,8 @@ class LandingAnalysisApp(tk.Tk):
         self.levels_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         self._levels_scroll_cid = self.levels_canvas.mpl_connect("scroll_event", self._on_levels_scroll)
         self._levels_click_cid = self.levels_canvas.mpl_connect("button_press_event", self._on_levels_click)
+        self._levels_motion_cid = self.levels_canvas.mpl_connect("motion_notify_event", self._on_levels_motion)
+        self._levels_release_cid = self.levels_canvas.mpl_connect("button_release_event", self._on_levels_release)
         self._draw_empty_levels_chart()
 
     def _build_backtest_tab(self):
@@ -866,7 +869,7 @@ class LandingAnalysisApp(tk.Tk):
             return
 
         ax = self.ax_price_levels
-        scale = 0.85 if event.button == "up" else 1.18
+        scale = 0.9 if event.button == "up" else 1.1
 
         xmin, xmax = ax.get_xlim()
         xw = xmax - xmin
@@ -884,10 +887,10 @@ class LandingAnalysisApp(tk.Tk):
 
         def_xmin, def_xmax = self._levels_default_xlim
         def_ymin, def_ymax = self._levels_default_ylim
-        min_xw = (def_xmax - def_xmin) * 0.05
+        min_xw = (def_xmax - def_xmin) * 0.04
         min_yw = (def_ymax - def_ymin) * 0.02
-        max_xw = (def_xmax - def_xmin) * 3.0
-        max_yw = (def_ymax - def_ymin) * 3.0
+        max_xw = (def_xmax - def_xmin) * 4.0
+        max_yw = (def_ymax - def_ymin) * 4.0
 
         new_xw = min(max(new_xw, min_xw), max_xw)
         new_yw = min(max(new_yw, min_yw), max_yw)
@@ -898,28 +901,62 @@ class LandingAnalysisApp(tk.Tk):
 
         ax.set_xlim(new_xmin, new_xmax)
         ax.set_ylim(new_ymin, new_ymax)
-        self.ax_ladder.set_ylim(new_ymin, new_ymax)
-        self.ax_volume_profile.set_ylim(new_ymin, new_ymax)
+        self._refresh_price_chart_view()
+
+    def _on_levels_click(self, event):
+        if event.inaxes != self.ax_price_levels:
+            return
+        if event.dblclick:
+            self._reset_levels_zoom()
+            return
+        if event.button == 1 and event.xdata is not None and event.ydata is not None:
+            self._price_pan_ref = (
+                event.xdata,
+                event.ydata,
+                ax.get_xlim(),
+                ax.get_ylim(),
+            ) if (ax := self.ax_price_levels) else None
+
+    def _levels_event_xy(self, event, ax):
+        if event.xdata is not None and event.ydata is not None:
+            return event.xdata, event.ydata
+        if event.x is None or event.y is None:
+            return None
+        return ax.transData.inverted().transform((event.x, event.y))
+
+    def _on_levels_motion(self, event):
+        if self._price_pan_ref is None:
+            return
+        ax = self.ax_price_levels
+        xy = self._levels_event_xy(event, ax)
+        if xy is None:
+            return
+        xdata, ydata = xy
+        ref_x, ref_y, (xmin, xmax), (ymin, ymax) = self._price_pan_ref
+        dx = xdata - ref_x
+        dy = ydata - ref_y
+        ax.set_xlim(xmin - dx, xmax - dx)
+        ax.set_ylim(ymin - dy, ymax - dy)
+        self._refresh_price_chart_view()
+
+    def _on_levels_release(self, event):
+        if event.button == 1:
+            self._price_pan_ref = None
+
+    def _refresh_price_chart_view(self):
+        ax = self.ax_price_levels
         apply_price_axis_format(ax, COLORS)
         refresh_level_price_labels(ax, COLORS)
         self.levels_canvas.draw_idle()
-
-    def _on_levels_click(self, event):
-        if event.dblclick and event.inaxes == self.ax_price_levels:
-            self._reset_levels_zoom()
 
     def _reset_levels_zoom(self):
         if self._levels_default_xlim is None or self._levels_default_ylim is None:
             return
         ax = self.ax_price_levels
         ax.set_xlim(self._levels_default_xlim)
-        ylim = self._levels_default_ylim
-        ax.set_ylim(ylim)
-        self.ax_ladder.set_ylim(ylim)
-        self.ax_volume_profile.set_ylim(ylim)
-        apply_price_axis_format(ax, COLORS)
-        refresh_level_price_labels(ax, COLORS)
-        self.levels_canvas.draw_idle()
+        ax.set_ylim(self._levels_default_ylim)
+        self._price_pan_ref = None
+        self._refresh_price_chart_view()
 
     def _resolve_ticker(self) -> str:
         manual = self.custom_ticker_var.get().strip()
