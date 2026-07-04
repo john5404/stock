@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 import matplotlib.dates as mdates
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -115,8 +116,8 @@ SIDEBAR_PANEL_WIDTH = 252
 SIDEBAR_CONTENT_WIDTH = 236
 SIDEBAR_WRAPLENGTH = 218
 SIDEBAR_FIELD_WIDTH = 22
-PORTFOLIO_CHART_WIDTH = 450
-PORTFOLIO_PIE_FIGSIZE = (4.12, 9.6)
+PORTFOLIO_CHART_WIDTH = 560
+PORTFOLIO_PIE_FIGSIZE = (5.36, 12.5)
 PORTFOLIO_COL_WIDTHS = {
     "tw": (100, 80, 48, 56, 64, 64, 56, 80, 52, 32),
     "us": (100, 48, 56, 64, 64, 56, 80, 80, 52, 32),
@@ -2391,11 +2392,14 @@ class LandingAnalysisApp(tk.Tk):
             counterclock=False,
             autopct=lambda pct: f"{pct:.0f}%",
             pctdistance=0.76,
-            textprops={"color": COLORS["text"], "fontsize": 8.5, "weight": "bold"},
+            textprops={"color": "#ffffff", "fontsize": 11, "weight": "bold"},
             wedgeprops=wedgeprops,
         )
         for autotext in autotexts:
-            autotext.set_color(COLORS["text"])
+            autotext.set_color("#ffffff")
+            autotext.set_path_effects(
+                [pe.withStroke(linewidth=2.4, foreground="#000000")]
+            )
 
         if len(slices) <= 4:
             ax.legend(
