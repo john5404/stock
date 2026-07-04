@@ -470,14 +470,13 @@ class LandingAnalysisApp(tk.Tk):
 
         title_block = tk.Frame(header_inner, bg=COLORS["surface"])
         title_block.pack(side=tk.LEFT, fill=tk.Y)
-        tk.Label(title_block, text="落點分析系統", bg=COLORS["surface"], fg=COLORS["text"], font=FONTS["title"]).pack(anchor="w")
         tk.Label(
             title_block,
             text="Landing Point Analyzer · 支撐阻力 · 策略回測 · 持股配比",
             bg=COLORS["surface"],
             fg=COLORS["muted"],
             font=FONTS["subtitle"],
-        ).pack(anchor="w", pady=(2, 0))
+        ).pack(anchor="w")
 
         self.header_ticker_var = tk.StringVar(value="尚未載入")
         self.market_badge_var = tk.StringVar(value="")
