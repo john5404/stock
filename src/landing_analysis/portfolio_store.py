@@ -412,6 +412,29 @@ def portfolio_market_slices(sections: list[PortfolioSection]) -> list[PortfolioP
     return slices
 
 
+def position_pie_slices(section: PortfolioSection) -> list[PortfolioPieSlice]:
+    """Return long vs short allocation within a market section."""
+    stats = calc_position_stats(section)
+    total_twd = stats["total_twd"]
+    if total_twd <= 0:
+        return []
+
+    slices: list[PortfolioPieSlice] = []
+    for key, label in (("long", "長線"), ("short", "短線")):
+        twd = stats[key]["twd"]
+        if twd <= 0:
+            continue
+        slices.append(
+            PortfolioPieSlice(
+                label=label,
+                twd=twd,
+                market_id=key,
+                pct=twd / total_twd * 100,
+            )
+        )
+    return slices
+
+
 def _search_yahoo_symbol(market: str, name: str) -> str | None:
     import json
     import urllib.parse

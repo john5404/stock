@@ -17,8 +17,8 @@ from landing_analysis.portfolio_store import (
     parse_markdown,
     portfolio_pie_slices,
     portfolio_market_slices,
+    position_pie_slices,
     save_portfolio,
-    section_pie_slices,
     to_markdown,
 )
 
@@ -98,14 +98,17 @@ class PortfolioStoreTests(unittest.TestCase):
         self.assertEqual(slices[1].label, "其他")
         self.assertAlmostEqual(sum(s.pct for s in slices), 100.0)
 
-    def test_section_and_market_pie_slices(self):
+    def test_market_and_position_pie_slices(self):
         sections = [
             PortfolioSection(
                 id="tw",
                 title="TW Stocks",
                 currency="TWD",
                 has_rate=False,
-                rows=[PortfolioRow(name="2330", shares=10, cost=100)],
+                rows=[
+                    PortfolioRow(name="2330", shares=10, cost=100, position="long"),
+                    PortfolioRow(name="0050", shares=5, cost=50, position="short"),
+                ],
             ),
             PortfolioSection(
                 id="us",
@@ -113,16 +116,20 @@ class PortfolioStoreTests(unittest.TestCase):
                 currency="USD",
                 has_rate=True,
                 rate=30.0,
-                rows=[PortfolioRow(name="AAPL", shares=2, cost=100)],
+                rows=[PortfolioRow(name="AAPL", shares=2, cost=100, position="long")],
             ),
         ]
-        tw_slices = section_pie_slices(sections[0])
-        self.assertEqual(len(tw_slices), 1)
-        self.assertAlmostEqual(tw_slices[0].pct, 100.0)
-
         market_slices = portfolio_market_slices(sections)
         self.assertEqual(len(market_slices), 2)
         self.assertAlmostEqual(sum(s.pct for s in market_slices), 100.0)
+
+        tw_pos = position_pie_slices(sections[0])
+        self.assertEqual(len(tw_pos), 2)
+        self.assertAlmostEqual(sum(s.pct for s in tw_pos), 100.0)
+
+        us_pos = position_pie_slices(sections[1])
+        self.assertEqual(len(us_pos), 1)
+        self.assertEqual(us_pos[0].label, "長線")
 
     def test_save_and_load(self):
         path = ROOT / "data" / "portfolio" / "_test_portfolio.md"

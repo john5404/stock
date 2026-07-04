@@ -53,8 +53,8 @@ from landing_analysis.portfolio_store import (
     portfolio_pie_slices,
     portfolio_market_slices,
     portfolio_total_twd,
+    position_pie_slices,
     save_portfolio,
-    section_pie_slices,
 )
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
@@ -1818,9 +1818,9 @@ class LandingAnalysisApp(tk.Tk):
             wspace=0.2,
         )
         self.portfolio_pie_ax_main = self.portfolio_pie_fig.add_subplot(pie_grid[:, 0])
-        self.portfolio_pie_ax_tw = self.portfolio_pie_fig.add_subplot(pie_grid[0, 1])
-        self.portfolio_pie_ax_us = self.portfolio_pie_fig.add_subplot(pie_grid[1, 1])
-        self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[2, 1])
+        self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[0, 1])
+        self.portfolio_pie_ax_tw_pos = self.portfolio_pie_fig.add_subplot(pie_grid[1, 1])
+        self.portfolio_pie_ax_us_pos = self.portfolio_pie_fig.add_subplot(pie_grid[2, 1])
         self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=chart_card)
         self.portfolio_pie_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
@@ -2207,6 +2207,10 @@ class LandingAnalysisApp(tk.Tk):
     def _portfolio_pie_color(self, slice_: PortfolioPieSlice, index: int) -> str:
         tw_shades = ("#3d8f7a", "#2f7463", "#4ea892", "#256b58", "#5cb89f", "#1f5a4a")
         us_shades = ("#4a7fa8", "#3d6d92", "#5a92b8", "#2f5f7f", "#6ba3c8", "#254f68")
+        if slice_.market_id == "long":
+            return COLORS["success"]
+        if slice_.market_id == "short":
+            return COLORS["warning"]
         if slice_.market_id == "tw":
             return tw_shades[index % len(tw_shades)]
         if slice_.market_id == "us":
@@ -2300,21 +2304,21 @@ class LandingAnalysisApp(tk.Tk):
             empty_text="無持股資料",
         )
         self._render_portfolio_pie_axis(
-            self.portfolio_pie_ax_tw,
-            section_pie_slices(tw_sec) if tw_sec else [],
-            title="台股",
-            compact=True,
-        )
-        self._render_portfolio_pie_axis(
-            self.portfolio_pie_ax_us,
-            section_pie_slices(us_sec) if us_sec else [],
-            title="美股",
-            compact=True,
-        )
-        self._render_portfolio_pie_axis(
             self.portfolio_pie_ax_market,
             portfolio_market_slices(self._portfolio_sections),
-            title="市場",
+            title="台美股",
+            compact=True,
+        )
+        self._render_portfolio_pie_axis(
+            self.portfolio_pie_ax_tw_pos,
+            position_pie_slices(tw_sec) if tw_sec else [],
+            title="台股長短",
+            compact=True,
+        )
+        self._render_portfolio_pie_axis(
+            self.portfolio_pie_ax_us_pos,
+            position_pie_slices(us_sec) if us_sec else [],
+            title="美股長短",
             compact=True,
         )
         self.portfolio_pie_canvas.draw_idle()
