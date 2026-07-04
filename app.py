@@ -2050,6 +2050,7 @@ class LandingAnalysisApp(tk.Tk):
         self._update_portfolio_summaries()
         if row.name and row.name != prev_name:
             self._refresh_portfolio_quotes(force=True)
+        self.after_idle(lambda: self._render_portfolio_rows(sec_id))
 
     def _sort_portfolio_section(self, sec: PortfolioSection):
         sec.rows.sort(
@@ -2061,7 +2062,6 @@ class LandingAnalysisApp(tk.Tk):
 
     def _portfolio_position_change(self, sec_id: str, row_idx: int):
         self._portfolio_row_change(sec_id, row_idx)
-        self._render_portfolio_rows(sec_id)
 
     def _render_portfolio_rows(self, sec_id: str):
         sec = self._portfolio_section(sec_id)
