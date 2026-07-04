@@ -435,16 +435,6 @@ def draw_scheme_c(
             fontsize=7,
             color=colors["success"],
         )
-        ax_ladder.text(
-            -width - 0.15,
-            level.price - bar_h * 1.6,
-            format_methods_zh(level.methods),
-            ha="right",
-            va="top",
-            fontsize=6,
-            color=colors["success"],
-            alpha=0.9,
-        )
     for level in analysis.resistances:
         width = level.strength * 0.9
         ax_ladder.barh(
