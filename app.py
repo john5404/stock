@@ -1394,7 +1394,7 @@ class LandingAnalysisApp(tk.Tk):
                 payload = self._fetch_data_payload(ticker, period, lookback)
                 self.after(0, lambda: self._on_load_success(payload, on_complete, run_analysis_after))
             except Exception as exc:
-                self.after(0, lambda: self._on_load_error(exc))
+                self.after(0, lambda e=exc: self._on_load_error(e))
 
         if blocking:
             try:
@@ -2530,7 +2530,7 @@ class LandingAnalysisApp(tk.Tk):
                 quotes = fetch_quotes(self._portfolio_sections, force=force)
                 self.after(0, lambda: self._on_portfolio_quotes_ready(quotes, None, schedule_next))
             except Exception as exc:
-                self.after(0, lambda: self._on_portfolio_quotes_ready({}, exc, schedule_next))
+                self.after(0, lambda e=exc: self._on_portfolio_quotes_ready({}, e, schedule_next))
 
         threading.Thread(target=worker, daemon=True).start()
 
