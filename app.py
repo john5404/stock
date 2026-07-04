@@ -1880,6 +1880,11 @@ class LandingAnalysisApp(tk.Tk):
         self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[0])
         self.portfolio_pie_ax_tw_pos = self.portfolio_pie_fig.add_subplot(pie_grid[1])
         self.portfolio_pie_ax_us_pos = self.portfolio_pie_fig.add_subplot(pie_grid[2])
+        us_pos = self.portfolio_pie_ax_us_pos.get_position()
+        shift = 30 / (PORTFOLIO_PIE_FIGSIZE[1] * 100)
+        self.portfolio_pie_ax_us_pos.set_position(
+            [us_pos.x0, us_pos.y0 + shift, us_pos.width, us_pos.height]
+        )
         self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=pie_body)
         self.portfolio_pie_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
