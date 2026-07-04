@@ -164,6 +164,8 @@ class LandingAnalysisApp(tk.Tk):
         self._levels_default_xlim: tuple[float, float] | None = None
         self._levels_default_ylim: tuple[float, float] | None = None
         self._price_pan_ref: tuple[float, float, tuple[float, float], tuple[float, float]] | None = None
+        self._levels_scroll_after_id: str | None = None
+        self._levels_pan_after_id: str | None = None
         self._action_buttons: list[tk.Button] = []
         self._busy = False
         self._inst_note = ""
@@ -1322,7 +1324,33 @@ class LandingAnalysisApp(tk.Tk):
 
         ax.set_xlim(new_xmin, new_xmax)
         ax.set_ylim(new_ymin, new_ymax)
-        self._refresh_price_chart_view()
+        self._schedule_levels_pan_draw()
+        self._schedule_levels_axis_refresh()
+
+    def _cancel_levels_axis_refresh(self):
+        if self._levels_scroll_after_id:
+            try:
+                self.after_cancel(self._levels_scroll_after_id)
+            except tk.TclError:
+                pass
+            self._levels_scroll_after_id = None
+
+    def _schedule_levels_axis_refresh(self, delay_ms: int = 120):
+        self._cancel_levels_axis_refresh()
+        self._levels_scroll_after_id = self.after(delay_ms, self._finish_levels_axis_refresh)
+
+    def _finish_levels_axis_refresh(self):
+        self._levels_scroll_after_id = None
+        self._refresh_price_chart_view(light=False)
+
+    def _schedule_levels_pan_draw(self):
+        if self._levels_pan_after_id:
+            return
+        self._levels_pan_after_id = self.after(16, self._flush_levels_pan_draw)
+
+    def _flush_levels_pan_draw(self):
+        self._levels_pan_after_id = None
+        self.levels_canvas.draw_idle()
 
     def _on_levels_click(self, event):
         if event.inaxes != self.ax_price_levels:
@@ -1330,54 +1358,57 @@ class LandingAnalysisApp(tk.Tk):
         if event.dblclick:
             self._reset_levels_zoom()
             return
-        if event.button == 1 and event.xdata is not None and event.ydata is not None:
-            self._price_pan_ref = (
-                event.xdata,
-                event.ydata,
-                ax.get_xlim(),
-                ax.get_ylim(),
-            ) if (ax := self.ax_price_levels) else None
-
-    def _levels_event_xy(self, event, ax):
-        if event.xdata is not None and event.ydata is not None:
-            return event.xdata, event.ydata
-        if event.x is None or event.y is None:
-            return None
-        return ax.transData.inverted().transform((event.x, event.y))
+        if event.button == 1 and event.x is not None and event.y is not None:
+            ax = self.ax_price_levels
+            self._price_pan_ref = (event.x, event.y, ax.get_xlim(), ax.get_ylim())
 
     def _on_levels_motion(self, event):
-        if self._price_pan_ref is None:
+        if self._price_pan_ref is None or event.x is None or event.y is None:
             return
         ax = self.ax_price_levels
-        xy = self._levels_event_xy(event, ax)
-        if xy is None:
-            return
-        xdata, ydata = xy
         ref_x, ref_y, (xmin, xmax), (ymin, ymax) = self._price_pan_ref
-        dx = xdata - ref_x
-        dy = ydata - ref_y
-        ax.set_xlim(xmin - dx, xmax - dx)
-        ax.set_ylim(ymin - dy, ymax - dy)
-        self._refresh_price_chart_view()
+        bbox = ax.get_window_extent()
+        if bbox.width <= 0 or bbox.height <= 0:
+            return
+        dx = -(event.x - ref_x) * (xmax - xmin) / bbox.width
+        dy = (event.y - ref_y) * (ymax - ymin) / bbox.height
+        ax.set_xlim(xmin + dx, xmax + dx)
+        ax.set_ylim(ymin + dy, ymax + dy)
+        self._schedule_levels_pan_draw()
 
     def _on_levels_release(self, event):
         if event.button == 1:
             self._price_pan_ref = None
+            if self._levels_pan_after_id:
+                try:
+                    self.after_cancel(self._levels_pan_after_id)
+                except tk.TclError:
+                    pass
+                self._levels_pan_after_id = None
+            self._finish_levels_axis_refresh()
 
-    def _refresh_price_chart_view(self):
+    def _refresh_price_chart_view(self, *, light: bool = False):
         ax = self.ax_price_levels
-        apply_price_axis_format(ax, COLORS)
-        refresh_level_price_labels(ax, COLORS)
+        if not light:
+            apply_price_axis_format(ax, COLORS)
+            refresh_level_price_labels(ax, COLORS)
         self.levels_canvas.draw_idle()
 
     def _reset_levels_zoom(self):
         if self._levels_default_xlim is None or self._levels_default_ylim is None:
             return
+        self._cancel_levels_axis_refresh()
+        if self._levels_pan_after_id:
+            try:
+                self.after_cancel(self._levels_pan_after_id)
+            except tk.TclError:
+                pass
+            self._levels_pan_after_id = None
         ax = self.ax_price_levels
         ax.set_xlim(self._levels_default_xlim)
         ax.set_ylim(self._levels_default_ylim)
         self._price_pan_ref = None
-        self._refresh_price_chart_view()
+        self._refresh_price_chart_view(light=False)
 
     def _resolve_ticker(self) -> str:
         query = self.ticker_search_var.get().strip()
