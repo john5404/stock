@@ -1786,24 +1786,46 @@ class LandingAnalysisApp(tk.Tk):
             highlightbackground=COLORS["border"],
             highlightthickness=1,
         )
-        summary_card.pack(fill=tk.X, padx=12, pady=12)
-        summary_inner = tk.Frame(summary_card, bg=COLORS["surface"])
-        summary_inner.pack(fill=tk.X, padx=16, pady=12)
-
+        summary_card.pack(fill=tk.X, padx=12, pady=(12, 0))
         self.portfolio_grand_summary_var = tk.StringVar(value="尚未載入持股資料")
         tk.Label(
-            summary_inner,
+            summary_card,
             textvariable=self.portfolio_grand_summary_var,
             bg=COLORS["surface"],
             fg=COLORS["text"],
             font=FONTS["body"],
             justify=tk.LEFT,
-            wraplength=640,
-        ).pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand=True)
+            wraplength=1000,
+        ).pack(anchor=tk.W, padx=16, pady=12)
 
-        pie_wrap = tk.Frame(summary_inner, bg=COLORS["surface"])
-        pie_wrap.pack(side=tk.RIGHT, padx=(12, 0))
-        self.portfolio_pie_fig = plt.figure(figsize=(3.4, 5.6), dpi=100)
+        content = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
+        content.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+
+        table_panel = tk.Frame(content, bg=COLORS["bg"])
+        table_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        canvas = tk.Canvas(table_panel, bg=COLORS["bg"], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(table_panel, orient=tk.VERTICAL, command=canvas.yview)
+        scroll_inner = tk.Frame(canvas, bg=COLORS["bg"])
+        scroll_inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        self._portfolio_canvas_window = canvas.create_window((0, 0), window=scroll_inner, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfig(self._portfolio_canvas_window, width=e.width),
+        )
+        self._bind_sidebar_scroll(canvas)
+
+        chart_panel = tk.Frame(
+            content,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        chart_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(12, 0))
+        self.portfolio_pie_fig = plt.figure(figsize=(3.6, 7.2), dpi=100)
         self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
         pie_grid = GridSpec(
             3,
@@ -1815,21 +1837,8 @@ class LandingAnalysisApp(tk.Tk):
         self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[0])
         self.portfolio_pie_ax_tw_pos = self.portfolio_pie_fig.add_subplot(pie_grid[1])
         self.portfolio_pie_ax_us_pos = self.portfolio_pie_fig.add_subplot(pie_grid[2])
-        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=pie_wrap)
-        self.portfolio_pie_canvas.get_tk_widget().pack()
-
-        body = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
-        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
-
-        canvas = tk.Canvas(body, bg=COLORS["bg"], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(body, orient=tk.VERTICAL, command=canvas.yview)
-        scroll_inner = tk.Frame(canvas, bg=COLORS["bg"])
-        scroll_inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scroll_inner, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self._bind_sidebar_scroll(canvas)
+        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=chart_panel)
+        self.portfolio_pie_canvas.get_tk_widget().pack(padx=8, pady=8)
 
         self.portfolio_section_frames: dict[str, tk.Frame] = {}
         for sec_id, title, color in (
