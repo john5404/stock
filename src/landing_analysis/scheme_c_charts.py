@@ -377,6 +377,13 @@ def draw_scheme_c(
     )
     ax_price._current_price_value = current
     apply_price_axis_format(ax_price, colors)
+    ax_price.set_title(
+        f"{ticker} · {strategy_name} · 價格走勢 + 落點線",
+        color=colors["text"],
+        fontsize=11,
+        fontweight="bold",
+        pad=10,
+    )
     ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
 
     # --- Price ladder ---

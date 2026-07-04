@@ -1575,6 +1575,7 @@ class LandingAnalysisApp(tk.Tk):
     def _draw_empty_chart(self):
         self.ax.clear()
         self.ax.set_facecolor(COLORS["chart_bg"])
+        self.ax.set_title("交易走勢", color=COLORS["muted"], pad=12)
         self.ax.grid(True, alpha=0.2)
         for spine in self.ax.spines.values():
             spine.set_color(COLORS["border"])
@@ -1627,6 +1628,7 @@ class LandingAnalysisApp(tk.Tk):
                     linewidth=1,
                     zorder=4,
                 )
+        self.ax.set_title(f"{self.ticker}  ·  {self.strategy_var.get()}", color=COLORS["text"], pad=12)
         self.ax.grid(True, alpha=0.2)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
         for spine in self.ax.spines.values():
