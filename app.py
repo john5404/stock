@@ -81,6 +81,13 @@ COLORS = {
     "danger_soft": "#140d0c",
     "strength_high": "#8f4a4a",
     "warning": "#b8894a",
+    "warning_soft": "#171008",
+    "long_row": "#0a1310",
+    "long_row_alt": "#081210",
+    "short_row": "#15100a",
+    "short_row_alt": "#130e08",
+    "long_pill": "#2f7a68",
+    "short_pill": "#b07d3a",
     "chart_bg": "#050608",
     "tree_header": "#0a0d11",
     "tree_zebra": "#07090c",
@@ -2077,6 +2084,14 @@ class LandingAnalysisApp(tk.Tk):
     def _portfolio_position_change(self, sec_id: str, row_idx: int):
         self._portfolio_row_change(sec_id, row_idx)
 
+    def _portfolio_toggle_position(self, sec_id: str, row_idx: int):
+        refs = self.portfolio_row_refs.get(sec_id, [])
+        if not (0 <= row_idx < len(refs)):
+            return
+        pos_var = refs[row_idx]["position"]
+        pos_var.set("短線" if pos_var.get() in ("長線", "long") else "長線")
+        self._portfolio_row_change(sec_id, row_idx)
+
     def _render_portfolio_rows(self, sec_id: str):
         sec = self._portfolio_section(sec_id)
         table_wrap = self.portfolio_row_containers.get(sec_id)
@@ -2092,7 +2107,11 @@ class LandingAnalysisApp(tk.Tk):
         for idx, item in enumerate(calc.items):
             row = item.row
             grid_row = idx + 1
-            row_bg = COLORS["tree_zebra"] if idx % 2 else COLORS["surface"]
+            is_short = row.position == "short"
+            if is_short:
+                row_bg = COLORS["short_row_alt"] if idx % 2 else COLORS["short_row"]
+            else:
+                row_bg = COLORS["long_row_alt"] if idx % 2 else COLORS["long_row"]
 
             name_var = tk.StringVar(value=row.name)
             note_var = tk.StringVar(value=row.note)
@@ -2118,15 +2137,23 @@ class LandingAnalysisApp(tk.Tk):
                 ref["note"] = note_var
                 col += 1
 
-            pos_combo = ttk.Combobox(
+            pos_pill = tk.Button(
                 table_wrap,
                 textvariable=pos_var,
-                values=["長線", "短線"],
-                state="readonly",
-                width=4,
-                style="Dark.TCombobox",
+                command=lambda sid=sec_id, i=idx: self._portfolio_toggle_position(sid, i),
+                bg=COLORS["short_pill"] if is_short else COLORS["long_pill"],
+                fg="#f2f5f8",
+                activebackground=COLORS["short_pill"] if is_short else COLORS["long_pill"],
+                activeforeground="#ffffff",
+                relief=tk.FLAT,
+                font=FONTS["body_bold"],
+                bd=0,
+                padx=4,
+                pady=3,
+                cursor="hand2",
             )
-            pos_combo.grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            pos_pill.grid(row=grid_row, column=col, sticky="nsew", padx=3, pady=3)
+            ref["position_pill"] = pos_pill
             col += 1
 
             shares_entry = self._portfolio_entry(table_wrap, shares_var)
@@ -2216,7 +2243,6 @@ class LandingAnalysisApp(tk.Tk):
             name_entry.bind("<Return>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
             if note_entry is not None:
                 note_entry.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
-            pos_combo.bind("<<ComboboxSelected>>", lambda _e, sid=sec_id, i=idx: self._portfolio_position_change(sid, i))
 
         self._portfolio_render_total_row(table_wrap, sec_id, len(calc.items) + 1, headers)
         self._update_portfolio_section_display(sec_id)
