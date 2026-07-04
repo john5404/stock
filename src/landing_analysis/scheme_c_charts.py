@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import matplotlib.dates as mdates
+from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 from .analyzer import AnalysisResult, LevelCluster
@@ -78,17 +79,9 @@ def apply_price_axis_format(ax, colors: dict, *, show_ylabel: bool = False):
 
 
 def refresh_level_price_labels(ax, colors: dict):
-    ymin, ymax = ax.get_ylim()
-    span = max(ymax - ymin, 1e-9)
-    for artist, price, color, stars, methods_zh in getattr(ax, "_level_labels", []):
-        head = f"{format_price_value(price, span)} {stars}"
-        text = f"{head}\n{methods_zh}" if methods_zh else head
-        artist.set_text(text)
+    for artist, _price, color, stars, _methods_zh in getattr(ax, "_level_labels", []):
+        artist.set_text(stars)
         artist.set_color(color)
-    current_art = getattr(ax, "_current_price_label", None)
-    current_price = getattr(ax, "_current_price_value", None)
-    if current_art is not None and current_price is not None:
-        current_art.set_text(f"現價 {format_price_value(current_price, span)}")
 
 
 def volume_profile_data(df: pd.DataFrame, n_bins: int = 36) -> tuple[np.ndarray, np.ndarray]:
@@ -313,8 +306,6 @@ def draw_scheme_c(
     if plot_df["MA20"].notna().any():
         ax_price.plot(dates, plot_df["MA20"], color="#9a7a45", linewidth=1.1, alpha=0.7, label="MA20", zorder=3)
 
-    price_span = y_max_data - y_min_data + 2 * y_pad
-
     for level in analysis.supports:
         ax_price.axhline(
             level.price,
@@ -324,21 +315,19 @@ def draw_scheme_c(
             linewidth=_line_width(level.strength),
             zorder=2,
         )
-        methods_zh = format_methods_zh(level.methods)
         label = ax_price.annotate(
-            level_label_text(level.price, price_span, level.stars, level.methods, show_methods=True),
+            level.stars,
             xy=(0.01, level.price),
             xycoords=("axes fraction", "data"),
             xytext=(4, -6),
             textcoords="offset points",
             color=colors["success"],
-            fontsize=7,
+            fontsize=8,
             va="top",
             ha="left",
             annotation_clip=False,
-            linespacing=0.95,
         )
-        ax_price._level_labels.append((label, level.price, colors["success"], level.stars, methods_zh))
+        ax_price._level_labels.append((label, level.price, colors["success"], level.stars, ""))
     for level in analysis.resistances:
         ax_price.axhline(
             level.price,
@@ -349,7 +338,7 @@ def draw_scheme_c(
             zorder=2,
         )
         label = ax_price.annotate(
-            level_label_text(level.price, price_span, level.stars, level.methods, show_methods=False),
+            level.stars,
             xy=(1.0, level.price),
             xycoords=("axes fraction", "data"),
             xytext=(6, 0),
@@ -363,18 +352,6 @@ def draw_scheme_c(
         ax_price._level_labels.append((label, level.price, colors["danger"], level.stars, ""))
 
     ax_price.axhline(current, color=colors["warning"], linestyle=":", linewidth=1.2, alpha=0.9, zorder=5)
-    ax_price._current_price_label = ax_price.annotate(
-        f"現價 {format_price_value(current, price_span)}",
-        xy=(0.01, current),
-        xycoords=("axes fraction", "data"),
-        xytext=(0, 0),
-        textcoords="offset points",
-        color=colors["warning"],
-        fontsize=8,
-        va="bottom",
-        ha="left",
-        bbox={"boxstyle": "round,pad=0.25", "facecolor": colors["surface_elevated"], "edgecolor": colors["border"], "alpha": 0.92},
-    )
     ax_price._current_price_value = current
     apply_price_axis_format(ax_price, colors)
     ax_price.set_title(
@@ -385,6 +362,22 @@ def draw_scheme_c(
         pad=10,
     )
     ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
+    legend_items = [
+        Line2D([0], [0], color=colors["accent_dark"], linewidth=2, label="Price"),
+        Line2D([0], [0], color="#9a7a45", linewidth=1.2, label="MA20"),
+        Line2D([0], [0], color=colors["success"], linestyle="--", linewidth=1.5, label="支撐"),
+        Line2D([0], [0], color=colors["danger"], linestyle="--", linewidth=1.5, label="阻力"),
+        Line2D([0], [0], color=colors["warning"], linestyle=":", linewidth=1.2, label="現價"),
+    ]
+    ax_price.legend(
+        handles=legend_items,
+        loc="upper left",
+        fontsize=7,
+        framealpha=0.92,
+        facecolor=colors["surface"],
+        edgecolor=colors["border"],
+        labelcolor=colors["text"],
+    )
 
     # --- Price ladder ---
     y_min, y_max = _price_band(all_levels, current)
