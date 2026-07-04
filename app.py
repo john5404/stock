@@ -1823,28 +1823,6 @@ class LandingAnalysisApp(tk.Tk):
             fg=COLORS["muted"],
             font=FONTS["caption"],
         ).pack(side=tk.LEFT)
-        tk.Button(
-            toolbar,
-            text="＋ 台股",
-            command=lambda: self._portfolio_add_row("tw"),
-            bg=COLORS["surface_elevated"],
-            fg=COLORS["text"],
-            relief=tk.FLAT,
-            font=FONTS["caption"],
-            padx=8,
-            pady=4,
-        ).pack(side=tk.RIGHT, padx=(4, 0))
-        tk.Button(
-            toolbar,
-            text="＋ 美股",
-            command=lambda: self._portfolio_add_row("us"),
-            bg=COLORS["surface_elevated"],
-            fg=COLORS["text"],
-            relief=tk.FLAT,
-            font=FONTS["caption"],
-            padx=8,
-            pady=4,
-        ).pack(side=tk.RIGHT)
 
         summary_card = tk.Frame(
             self.portfolio_main,
