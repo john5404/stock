@@ -40,6 +40,7 @@ from landing_analysis.scheme_c_charts import (
     refresh_level_price_labels,
 )
 from landing_analysis.portfolio_store import (
+    PortfolioPieSlice,
     PortfolioRow,
     PortfolioSection,
     QUOTE_POLL_MS,
@@ -49,6 +50,7 @@ from landing_analysis.portfolio_store import (
     default_portfolio_path,
     fetch_quotes,
     load_portfolio,
+    portfolio_pie_slices,
     portfolio_total_twd,
     save_portfolio,
 )
@@ -1784,16 +1786,26 @@ class LandingAnalysisApp(tk.Tk):
             highlightthickness=1,
         )
         summary_card.pack(fill=tk.X, padx=12, pady=12)
+        summary_inner = tk.Frame(summary_card, bg=COLORS["surface"])
+        summary_inner.pack(fill=tk.X, padx=16, pady=14)
+
         self.portfolio_grand_summary_var = tk.StringVar(value="尚未載入持股資料")
         tk.Label(
-            summary_card,
+            summary_inner,
             textvariable=self.portfolio_grand_summary_var,
             bg=COLORS["surface"],
             fg=COLORS["text"],
             font=FONTS["body"],
             justify=tk.LEFT,
-            wraplength=1000,
-        ).pack(anchor=tk.W, padx=16, pady=14)
+            wraplength=520,
+        ).pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand=True)
+
+        pie_wrap = tk.Frame(summary_inner, bg=COLORS["surface"])
+        pie_wrap.pack(side=tk.RIGHT, padx=(12, 0))
+        self.portfolio_pie_fig, self.portfolio_pie_ax = plt.subplots(figsize=(4.4, 3.2), dpi=100)
+        self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
+        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=pie_wrap)
+        self.portfolio_pie_canvas.get_tk_widget().pack()
 
         body = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
@@ -2173,6 +2185,66 @@ class LandingAnalysisApp(tk.Tk):
                 for sec in self._portfolio_sections
             )
         )
+        self._draw_portfolio_pie()
+
+    def _portfolio_pie_color(self, slice_: PortfolioPieSlice, index: int) -> str:
+        tw_shades = ("#3d8f7a", "#2f7463", "#4ea892", "#256b58", "#5cb89f", "#1f5a4a")
+        us_shades = ("#4a7fa8", "#3d6d92", "#5a92b8", "#2f5f7f", "#6ba3c8", "#254f68")
+        if slice_.market_id == "tw":
+            return tw_shades[index % len(tw_shades)]
+        if slice_.market_id == "us":
+            return us_shades[index % len(us_shades)]
+        return COLORS["muted"]
+
+    def _draw_portfolio_pie(self):
+        if not hasattr(self, "portfolio_pie_ax"):
+            return
+        ax = self.portfolio_pie_ax
+        ax.clear()
+        ax.set_facecolor(COLORS["surface"])
+        self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
+
+        slices = portfolio_pie_slices(self._portfolio_sections)
+        if not slices:
+            ax.text(
+                0.5,
+                0.5,
+                "無持股資料",
+                ha="center",
+                va="center",
+                color=COLORS["muted"],
+                fontsize=9,
+                transform=ax.transAxes,
+            )
+            ax.axis("off")
+            self.portfolio_pie_canvas.draw_idle()
+            return
+
+        tw_idx = us_idx = 0
+        colors: list[str] = []
+        for slice_ in slices:
+            if slice_.market_id == "tw":
+                colors.append(self._portfolio_pie_color(slice_, tw_idx))
+                tw_idx += 1
+            elif slice_.market_id == "us":
+                colors.append(self._portfolio_pie_color(slice_, us_idx))
+                us_idx += 1
+            else:
+                colors.append(self._portfolio_pie_color(slice_, 0))
+
+        labels = [f"{s.label}\n{s.pct:.1f}%" for s in slices]
+        sizes = [s.twd for s in slices]
+        ax.pie(
+            sizes,
+            labels=labels,
+            colors=colors,
+            startangle=90,
+            counterclock=False,
+            textprops={"color": COLORS["text"], "fontsize": 7},
+            wedgeprops={"edgecolor": COLORS["border"], "linewidth": 0.8},
+        )
+        ax.axis("equal")
+        self.portfolio_pie_canvas.draw_idle()
 
     def _ensure_portfolio_sections(self):
         if not self._portfolio_sections:

@@ -294,6 +294,58 @@ def portfolio_total_twd(sections: list[PortfolioSection]) -> float:
     return sum(calc_section(sec).total_twd for sec in sections)
 
 
+@dataclass
+class PortfolioPieSlice:
+    label: str
+    twd: float
+    market_id: str
+    pct: float
+
+
+def portfolio_pie_slices(
+    sections: list[PortfolioSection],
+    *,
+    min_pct: float = 2.0,
+) -> list[PortfolioPieSlice]:
+    """Return portfolio-wide pie slices weighted by TWD market value."""
+    grand = portfolio_total_twd(sections)
+    if grand <= 0:
+        return []
+
+    raw: list[PortfolioPieSlice] = []
+    for sec in sections:
+        calc = calc_section(sec)
+        for item in calc.items:
+            if item.twd <= 0:
+                continue
+            label = (item.row.note or item.row.name or "?").strip()
+            raw.append(
+                PortfolioPieSlice(
+                    label=label,
+                    twd=item.twd,
+                    market_id=sec.id,
+                    pct=item.twd / grand * 100,
+                )
+            )
+
+    if not raw:
+        return []
+
+    raw.sort(key=lambda s: s.twd, reverse=True)
+    main = [s for s in raw if s.pct >= min_pct]
+    other_twd = sum(s.twd for s in raw if s.pct < min_pct)
+    if other_twd > 0:
+        main.append(
+            PortfolioPieSlice(
+                label="其他",
+                twd=other_twd,
+                market_id="mix",
+                pct=other_twd / grand * 100,
+            )
+        )
+    return main
+
+
 def _search_yahoo_symbol(market: str, name: str) -> str | None:
     import json
     import urllib.parse

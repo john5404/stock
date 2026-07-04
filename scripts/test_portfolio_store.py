@@ -15,6 +15,7 @@ from landing_analysis.portfolio_store import (
     default_portfolio_path,
     load_portfolio,
     parse_markdown,
+    portfolio_pie_slices,
     save_portfolio,
     to_markdown,
 )
@@ -67,6 +68,33 @@ class PortfolioStoreTests(unittest.TestCase):
         calc = calc_section(sec)
         self.assertAlmostEqual(calc.total, 2000)
         self.assertAlmostEqual(sum(item.weight for item in calc.items), 100.0)
+
+    def test_portfolio_pie_slices(self):
+        sections = [
+            PortfolioSection(
+                id="tw",
+                title="TW Stocks",
+                currency="TWD",
+                has_rate=False,
+                rows=[
+                    PortfolioRow(name="A", shares=10, cost=100),
+                    PortfolioRow(name="B", shares=1, cost=50),
+                ],
+            ),
+            PortfolioSection(
+                id="us",
+                title="US Stocks",
+                currency="USD",
+                has_rate=True,
+                rate=30.0,
+                rows=[PortfolioRow(name="C", shares=2, cost=100)],
+            ),
+        ]
+        slices = portfolio_pie_slices(sections, min_pct=30.0)
+        self.assertEqual(len(slices), 2)
+        self.assertEqual(slices[0].label, "C")
+        self.assertEqual(slices[1].label, "其他")
+        self.assertAlmostEqual(sum(s.pct for s in slices), 100.0)
 
     def test_save_and_load(self):
         path = ROOT / "data" / "portfolio" / "_test_portfolio.md"
