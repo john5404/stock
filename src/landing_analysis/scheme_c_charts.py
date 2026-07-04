@@ -137,6 +137,9 @@ def draw_institutional_chart(
     lookback_days: int,
     ticker: str,
     is_tw: bool,
+    show_foreign: bool = True,
+    show_trust: bool = True,
+    show_dealer: bool = True,
 ):
     ax.clear()
     _style_axis(ax, colors)
@@ -176,15 +179,33 @@ def draw_institutional_chart(
     plot_df = inst_df.tail(min(len(inst_df), max(lookback_days, 30))).copy()
     dates = plot_df.index
     x = mdates.date2num(dates.to_pydatetime())
-    bar_w = 0.22
 
-    series = [
-        ("foreign_net", "外資", colors["accent"]),
-        ("trust_net", "投信", colors["success"]),
-        ("dealer_net", "自營", colors["warning"]),
+    all_series = [
+        ("foreign_net", "外資", colors["accent"], show_foreign),
+        ("trust_net", "投信", colors["success"], show_trust),
+        ("dealer_net", "自營", colors["warning"], show_dealer),
     ]
-    for idx, (col, label, color) in enumerate(series):
-        offset = (idx - 1) * bar_w
+    active = [(col, label, color) for col, label, color, show in all_series if show]
+    if not active:
+        ax.set_title("三大法人買賣超", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
+        ax.text(
+            0.5,
+            0.5,
+            "請至少勾選一項法人",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color=colors["muted"],
+            fontsize=10,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+        return
+
+    n = len(active)
+    bar_w = 0.22 if n == 3 else (0.32 if n == 2 else 0.45)
+    for idx, (col, label, color) in enumerate(active):
+        offset = (idx - (n - 1) / 2) * bar_w
         values = plot_df[col].values
         bar_colors = [colors["success"] if v >= 0 else colors["danger"] for v in values]
         ax.bar(
@@ -198,24 +219,30 @@ def draw_institutional_chart(
             label=label,
         )
 
-    ax.plot(
-        dates,
-        plot_df["total_net"],
-        color=colors["text"],
-        linewidth=1.3,
-        alpha=0.75,
-        label="合計",
-        zorder=5,
-    )
+    show_total = show_foreign and show_trust and show_dealer
+    if show_total:
+        ax.plot(
+            dates,
+            plot_df["total_net"],
+            color=colors["text"],
+            linewidth=1.3,
+            alpha=0.75,
+            label="合計",
+            zorder=5,
+        )
     ax.axhline(0, color=colors["border"], linewidth=0.9, alpha=0.9, zorder=1)
 
     last = plot_df.iloc[-1]
-    summary = (
-        f"最新  外資 {last['foreign_net']:+,.0f}  "
-        f"投信 {last['trust_net']:+,.0f}  "
-        f"自營 {last['dealer_net']:+,.0f}  "
-        f"合計 {last['total_net']:+,.0f} 股"
-    )
+    summary_parts = []
+    if show_foreign:
+        summary_parts.append(f"外資 {last['foreign_net']:+,.0f}")
+    if show_trust:
+        summary_parts.append(f"投信 {last['trust_net']:+,.0f}")
+    if show_dealer:
+        summary_parts.append(f"自營 {last['dealer_net']:+,.0f}")
+    if show_total:
+        summary_parts.append(f"合計 {last['total_net']:+,.0f}")
+    summary = "最新  " + "  ".join(summary_parts) + " 股"
     ax.set_title(
         f"{ticker} · 三大法人買賣超（股）",
         color=colors["text"],
@@ -240,7 +267,7 @@ def draw_institutional_chart(
     ax.legend(
         loc="upper right",
         fontsize=7,
-        ncol=4,
+        ncol=min(4, len(active) + (1 if show_total else 0)),
         framealpha=0.92,
         facecolor=colors["surface"],
         edgecolor=colors["border"],
@@ -284,6 +311,9 @@ def draw_scheme_c(
     lookback_days: int,
     inst_df: pd.DataFrame | None = None,
     is_tw: bool = False,
+    inst_show_foreign: bool = True,
+    inst_show_trust: bool = True,
+    inst_show_dealer: bool = True,
 ):
     for ax in (ax_price, ax_ladder, ax_vp):
         ax.clear()
@@ -489,6 +519,9 @@ def draw_scheme_c(
         lookback_days=lookback_days,
         ticker=ticker,
         is_tw=is_tw,
+        show_foreign=inst_show_foreign,
+        show_trust=inst_show_trust,
+        show_dealer=inst_show_dealer,
     )
 
     fig.subplots_adjust(left=0.09, right=0.92, top=0.94, bottom=0.10, wspace=0.32, hspace=0.42)

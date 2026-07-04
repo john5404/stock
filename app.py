@@ -36,6 +36,7 @@ from landing_analysis.indicators import ensure_indicators
 from landing_analysis.scheme_c_charts import (
     apply_price_axis_format,
     draw_empty_scheme_c,
+    draw_institutional_chart,
     draw_scheme_c,
     format_methods_zh,
     refresh_level_price_labels,
@@ -625,6 +626,30 @@ class LandingAnalysisApp(tk.Tk):
             width=SIDEBAR_FIELD_WIDTH,
             style="Dark.TCombobox",
         ).pack(fill=tk.X, pady=(4, 0))
+
+        inst_card = self._sidebar_card(self.analysis_sidebar, "三大法人圖")
+        self.inst_show_foreign_var = tk.BooleanVar(value=True)
+        self.inst_show_trust_var = tk.BooleanVar(value=True)
+        self.inst_show_dealer_var = tk.BooleanVar(value=True)
+        for label, var in (
+            ("外資", self.inst_show_foreign_var),
+            ("投信", self.inst_show_trust_var),
+            ("自營", self.inst_show_dealer_var),
+        ):
+            tk.Checkbutton(
+                inst_card,
+                text=label,
+                variable=var,
+                command=self._on_institutional_filter_change,
+                bg=COLORS["sidebar_elevated"],
+                fg=COLORS["text_inverse"],
+                selectcolor=COLORS["sidebar_border"],
+                activebackground=COLORS["sidebar_elevated"],
+                activeforeground=COLORS["text_inverse"],
+                font=FONTS["body"],
+                anchor="w",
+            ).pack(anchor=tk.W, pady=2)
+        self._sidebar_label(inst_card, "三項全勾選時顯示合計線", muted=True).pack(anchor=tk.W, pady=(2, 0))
 
         tk.Label(
             self.analysis_sidebar,
@@ -1220,9 +1245,39 @@ class LandingAnalysisApp(tk.Tk):
             lookback_days=self.lookback_var.get(),
             inst_df=self.df_institutional,
             is_tw=ticker_market(self.ticker) == "台股",
+            inst_show_foreign=self.inst_show_foreign_var.get(),
+            inst_show_trust=self.inst_show_trust_var.get(),
+            inst_show_dealer=self.inst_show_dealer_var.get(),
         )
         self._capture_levels_zoom_defaults()
         self.levels_canvas.draw()
+
+    def _institutional_show_flags(self) -> tuple[bool, bool, bool]:
+        return (
+            self.inst_show_foreign_var.get(),
+            self.inst_show_trust_var.get(),
+            self.inst_show_dealer_var.get(),
+        )
+
+    def _redraw_institutional_chart(self):
+        show_foreign, show_trust, show_dealer = self._institutional_show_flags()
+        draw_institutional_chart(
+            self.ax_institutional,
+            self.df_institutional,
+            colors=COLORS,
+            lookback_days=self.lookback_var.get(),
+            ticker=self.ticker,
+            is_tw=ticker_market(self.ticker) == "台股",
+            show_foreign=show_foreign,
+            show_trust=show_trust,
+            show_dealer=show_dealer,
+        )
+        self.levels_canvas.draw_idle()
+
+    def _on_institutional_filter_change(self):
+        if self.df is None:
+            return
+        self._redraw_institutional_chart()
 
     def _capture_levels_zoom_defaults(self):
         self._levels_default_xlim = self.ax_price_levels.get_xlim()

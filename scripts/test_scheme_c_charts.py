@@ -122,6 +122,41 @@ class SchemeCChartTests(unittest.TestCase):
         self.assertTrue(ax.patches or ax.lines)
         plt.close(fig)
 
+    def test_draw_institutional_chart_partial(self):
+        import pandas as pd
+
+        idx = pd.bdate_range("2024-01-01", periods=10)
+        inst = pd.DataFrame(
+            {
+                "foreign_net": [1000] * 10,
+                "trust_net": [200] * 10,
+                "dealer_net": [-100] * 10,
+                "total_net": [1100] * 10,
+                "foreign_buy": 1,
+                "foreign_sell": 1,
+                "trust_buy": 1,
+                "trust_sell": 1,
+                "dealer_buy": 1,
+                "dealer_sell": 1,
+            },
+            index=idx,
+        )
+        fig, ax = plt.subplots(figsize=(8, 2.5))
+        draw_institutional_chart(
+            ax,
+            inst,
+            colors=COLORS,
+            lookback_days=10,
+            ticker="2330.TW",
+            is_tw=True,
+            show_foreign=True,
+            show_trust=False,
+            show_dealer=False,
+        )
+        self.assertEqual(len(ax.patches), 10)
+        self.assertEqual(len(ax.lines), 1)
+        plt.close(fig)
+
     def test_price_format_precision(self):
         self.assertEqual(decimals_for_price_span(800), 0)
         self.assertEqual(decimals_for_price_span(50), 2)
