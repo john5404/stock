@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Landing point analysis desktop UI."""
 
+import signal
 import sys
 import threading
 import tkinter as tk
@@ -169,6 +170,19 @@ class LandingAnalysisApp(tk.Tk):
         self._build_ui()
         self._bind_shortcuts()
         self._apply_strategy_template("設備股")
+
+        self.protocol("WM_DELETE_WINDOW", self._quit_app)
+        self.bind_all("<Control-c>", lambda _e: self._quit_app())
+
+    def _quit_app(self):
+        try:
+            self._stop_portfolio_quote_poll()
+        except Exception:
+            pass
+        try:
+            self.quit()
+        finally:
+            self.destroy()
 
     def _setup_theme(self):
         style = ttk.Style(self)
@@ -2564,7 +2578,29 @@ class LandingAnalysisApp(tk.Tk):
 
 def main():
     app = LandingAnalysisApp()
-    app.mainloop()
+
+    def _handle_sigint(_signum, _frame):
+        app.after(0, app._quit_app)
+
+    try:
+        signal.signal(signal.SIGINT, _handle_sigint)
+    except (ValueError, OSError):
+        pass
+
+    # Tk's mainloop is C code, so the Python interpreter never regains control
+    # to deliver Ctrl+C (SIGINT) unless an `after` callback ticks periodically.
+    def _keepalive():
+        try:
+            app.after(200, _keepalive)
+        except tk.TclError:
+            pass
+
+    app.after(200, _keepalive)
+
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        app._quit_app()
 
 
 if __name__ == "__main__":
