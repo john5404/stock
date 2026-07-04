@@ -51,8 +51,10 @@ from landing_analysis.portfolio_store import (
     fetch_quotes,
     load_portfolio,
     portfolio_pie_slices,
+    portfolio_market_slices,
     portfolio_total_twd,
     save_portfolio,
+    section_pie_slices,
 )
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
@@ -1785,27 +1787,42 @@ class LandingAnalysisApp(tk.Tk):
             highlightbackground=COLORS["border"],
             highlightthickness=1,
         )
-        summary_card.pack(fill=tk.X, padx=12, pady=12)
-        summary_inner = tk.Frame(summary_card, bg=COLORS["surface"])
-        summary_inner.pack(fill=tk.X, padx=16, pady=14)
-
+        summary_card.pack(fill=tk.X, padx=12, pady=(12, 0))
         self.portfolio_grand_summary_var = tk.StringVar(value="尚未載入持股資料")
         tk.Label(
-            summary_inner,
+            summary_card,
             textvariable=self.portfolio_grand_summary_var,
             bg=COLORS["surface"],
             fg=COLORS["text"],
             font=FONTS["body"],
             justify=tk.LEFT,
-            wraplength=520,
-        ).pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand=True)
+            wraplength=1000,
+        ).pack(anchor=tk.W, padx=16, pady=12)
 
-        pie_wrap = tk.Frame(summary_inner, bg=COLORS["surface"])
-        pie_wrap.pack(side=tk.RIGHT, padx=(12, 0))
-        self.portfolio_pie_fig, self.portfolio_pie_ax = plt.subplots(figsize=(4.4, 3.2), dpi=100)
+        chart_card = tk.Frame(
+            self.portfolio_main,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        chart_card.pack(fill=tk.X, padx=12, pady=12)
+        self.portfolio_pie_fig = plt.figure(figsize=(10.5, 4.8), dpi=100)
         self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
-        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=pie_wrap)
-        self.portfolio_pie_canvas.get_tk_widget().pack()
+        pie_grid = GridSpec(
+            3,
+            2,
+            figure=self.portfolio_pie_fig,
+            width_ratios=[2.4, 1],
+            height_ratios=[1, 1, 1],
+            hspace=0.45,
+            wspace=0.2,
+        )
+        self.portfolio_pie_ax_main = self.portfolio_pie_fig.add_subplot(pie_grid[:, 0])
+        self.portfolio_pie_ax_tw = self.portfolio_pie_fig.add_subplot(pie_grid[0, 1])
+        self.portfolio_pie_ax_us = self.portfolio_pie_fig.add_subplot(pie_grid[1, 1])
+        self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[2, 1])
+        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=chart_card)
+        self.portfolio_pie_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
         body = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
@@ -2196,30 +2213,7 @@ class LandingAnalysisApp(tk.Tk):
             return us_shades[index % len(us_shades)]
         return COLORS["muted"]
 
-    def _draw_portfolio_pie(self):
-        if not hasattr(self, "portfolio_pie_ax"):
-            return
-        ax = self.portfolio_pie_ax
-        ax.clear()
-        ax.set_facecolor(COLORS["surface"])
-        self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
-
-        slices = portfolio_pie_slices(self._portfolio_sections)
-        if not slices:
-            ax.text(
-                0.5,
-                0.5,
-                "無持股資料",
-                ha="center",
-                va="center",
-                color=COLORS["muted"],
-                fontsize=9,
-                transform=ax.transAxes,
-            )
-            ax.axis("off")
-            self.portfolio_pie_canvas.draw_idle()
-            return
-
+    def _portfolio_pie_colors(self, slices: list[PortfolioPieSlice]) -> list[str]:
         tw_idx = us_idx = 0
         colors: list[str] = []
         for slice_ in slices:
@@ -2231,19 +2225,98 @@ class LandingAnalysisApp(tk.Tk):
                 us_idx += 1
             else:
                 colors.append(self._portfolio_pie_color(slice_, 0))
+        return colors
 
-        labels = [f"{s.label}\n{s.pct:.1f}%" for s in slices]
+    def _render_portfolio_pie_axis(
+        self,
+        ax,
+        slices: list[PortfolioPieSlice],
+        *,
+        title: str | None = None,
+        compact: bool = False,
+        empty_text: str = "無資料",
+    ):
+        ax.clear()
+        ax.set_facecolor(COLORS["surface"])
+        if title:
+            ax.set_title(
+                title,
+                color=COLORS["text"],
+                fontsize=8 if compact else 10,
+                pad=6 if compact else 8,
+            )
+        if not slices:
+            ax.text(
+                0.5,
+                0.5,
+                empty_text,
+                ha="center",
+                va="center",
+                color=COLORS["muted"],
+                fontsize=8 if compact else 9,
+                transform=ax.transAxes,
+            )
+            ax.axis("off")
+            return
+
+        colors = self._portfolio_pie_colors(slices)
         sizes = [s.twd for s in slices]
-        ax.pie(
-            sizes,
-            labels=labels,
-            colors=colors,
-            startangle=90,
-            counterclock=False,
-            textprops={"color": COLORS["text"], "fontsize": 7},
-            wedgeprops={"edgecolor": COLORS["border"], "linewidth": 0.8},
-        )
+        wedgeprops = {"edgecolor": COLORS["border"], "linewidth": 0.8}
+        if compact:
+            ax.pie(
+                sizes,
+                colors=colors,
+                startangle=90,
+                counterclock=False,
+                autopct=lambda pct: f"{pct:.0f}%" if pct >= 8 else "",
+                textprops={"color": COLORS["text"], "fontsize": 6},
+                wedgeprops=wedgeprops,
+            )
+        else:
+            labels = [f"{s.label}\n{s.pct:.1f}%" for s in slices]
+            ax.pie(
+                sizes,
+                labels=labels,
+                colors=colors,
+                startangle=90,
+                counterclock=False,
+                textprops={"color": COLORS["text"], "fontsize": 7},
+                wedgeprops=wedgeprops,
+            )
         ax.axis("equal")
+
+    def _draw_portfolio_pie(self):
+        if not hasattr(self, "portfolio_pie_ax_main"):
+            return
+        self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
+
+        tw_sec = self._portfolio_section("tw")
+        us_sec = self._portfolio_section("us")
+        self._render_portfolio_pie_axis(
+            self.portfolio_pie_ax_main,
+            portfolio_pie_slices(self._portfolio_sections),
+            title="投資組合",
+            compact=False,
+            empty_text="無持股資料",
+        )
+        self._render_portfolio_pie_axis(
+            self.portfolio_pie_ax_tw,
+            section_pie_slices(tw_sec) if tw_sec else [],
+            title="台股",
+            compact=True,
+        )
+        self._render_portfolio_pie_axis(
+            self.portfolio_pie_ax_us,
+            section_pie_slices(us_sec) if us_sec else [],
+            title="美股",
+            compact=True,
+        )
+        self._render_portfolio_pie_axis(
+            self.portfolio_pie_ax_market,
+            portfolio_market_slices(self._portfolio_sections),
+            title="市場",
+            compact=True,
+        )
         self.portfolio_pie_canvas.draw_idle()
 
     def _ensure_portfolio_sections(self):

@@ -346,6 +346,72 @@ def portfolio_pie_slices(
     return main
 
 
+def section_pie_slices(
+    section: PortfolioSection,
+    *,
+    min_pct: float = 2.0,
+) -> list[PortfolioPieSlice]:
+    """Return pie slices for a single market section (pct within section)."""
+    calc = calc_section(section)
+    total = calc.total_twd
+    if total <= 0:
+        return []
+
+    raw: list[PortfolioPieSlice] = []
+    for item in calc.items:
+        if item.twd <= 0:
+            continue
+        label = (item.row.note or item.row.name or "?").strip()
+        raw.append(
+            PortfolioPieSlice(
+                label=label,
+                twd=item.twd,
+                market_id=section.id,
+                pct=item.twd / total * 100,
+            )
+        )
+
+    if not raw:
+        return []
+
+    raw.sort(key=lambda s: s.twd, reverse=True)
+    main = [s for s in raw if s.pct >= min_pct]
+    other_twd = sum(s.twd for s in raw if s.pct < min_pct)
+    if other_twd > 0:
+        main.append(
+            PortfolioPieSlice(
+                label="其他",
+                twd=other_twd,
+                market_id=section.id,
+                pct=other_twd / total * 100,
+            )
+        )
+    return main
+
+
+def portfolio_market_slices(sections: list[PortfolioSection]) -> list[PortfolioPieSlice]:
+    """Return TW vs US market allocation slices."""
+    grand = portfolio_total_twd(sections)
+    if grand <= 0:
+        return []
+
+    labels = {"tw": "台股", "us": "美股"}
+    slices: list[PortfolioPieSlice] = []
+    for sec in sections:
+        twd = calc_section(sec).total_twd
+        if twd <= 0:
+            continue
+        slices.append(
+            PortfolioPieSlice(
+                label=labels.get(sec.id, sec.title),
+                twd=twd,
+                market_id=sec.id,
+                pct=twd / grand * 100,
+            )
+        )
+    return slices
+
+
 def _search_yahoo_symbol(market: str, name: str) -> str | None:
     import json
     import urllib.parse
