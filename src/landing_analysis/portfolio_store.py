@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -12,17 +13,25 @@ import pandas as pd
 
 from .data_fetcher import detect_market_from_input, normalize_ticker_input
 
+# yfinance logs noisy "possibly delisted" warnings to stderr while we probe
+# alternate market suffixes (.TW vs .TWO); silence those, real failures are
+# still surfaced via return values.
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+
 TW_NAME_MAP: dict[str, str] = {
     "台積電": "2330.TW",
     "國巨": "2327.TW",
     "台耀": "4142.TW",
     "台燿": "6274.TWO",
-    "群聯": "8299.TW",
+    "群聯": "8299.TWO",
     "正2": "00631L.TW",
     "聯發科": "2454.TW",
     "元大50": "0050.TW",
     "元大50正2": "00631L.TW",
 }
+
+# Numeric codes that trade on TPEx (櫃買) and therefore need the .TWO suffix.
+TW_OTC_CODES: set[str] = {"6274", "8299", "5347", "6488", "3374", "8069"}
 
 US_NAME_MAP: dict[str, str] = {
     "GOOGLE": "GOOGL",
@@ -590,13 +599,19 @@ def resolve_symbol(market: str, name: str) -> str | None:
         return TW_NAME_MAP[text]
     if re.fullmatch(r"[0-9]{4}[A-Za-z]?", text):
         code = text.upper()
-        for suffix in (".TW", ".TWO"):
+        base_code = re.sub(r"[A-Za-z]$", "", code)
+        # Known OTC codes go straight to .TWO; otherwise try listed first.
+        suffixes = (".TWO", ".TW") if base_code in TW_OTC_CODES else (".TW", ".TWO")
+        for suffix in suffixes:
             symbol = f"{code}{suffix}"
-            price = _chart_price(symbol)
+            try:
+                price = _chart_price_yahoo_api(symbol)
+            except Exception:
+                price = None
             if price is not None:
                 _symbol_cache[cache_key] = symbol
                 return symbol
-        symbol = f"{code}.TW"
+        symbol = f"{code}{suffixes[0]}"
         _symbol_cache[cache_key] = symbol
         return symbol
 
