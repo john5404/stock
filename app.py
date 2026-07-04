@@ -111,6 +111,14 @@ BACKTEST_MODE_CODES: dict[str, str] = {label: code for code, label in BACKTEST_M
 
 APP_MODES = ("落點分析", "股市配比")
 
+PORTFOLIO_CHART_WIDTH = 300
+PORTFOLIO_KPI_SPECS = (
+    ("grand", "總資產 (TWD)", "text"),
+    ("tw", "台股", "success"),
+    ("us", "美股", "accent"),
+    ("budget", "預算使用", "muted"),
+)
+
 
 class LandingAnalysisApp(tk.Tk):
     def __init__(self):
@@ -1743,6 +1751,51 @@ class LandingAnalysisApp(tk.Tk):
             justify=tk.LEFT,
         ).pack(anchor=tk.W)
 
+    def _portfolio_kpi_card(self, parent, caption: str, var: tk.StringVar, *, tone: str = "text") -> tk.Frame:
+        card = tk.Frame(
+            parent,
+            bg=COLORS["surface_elevated"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        inner = tk.Frame(card, bg=COLORS["surface_elevated"])
+        inner.pack(fill=tk.BOTH, expand=True, padx=12, pady=10)
+        tk.Label(
+            inner,
+            text=caption,
+            bg=COLORS["surface_elevated"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+            anchor=tk.W,
+        ).pack(anchor=tk.W)
+        tk.Label(
+            inner,
+            textvariable=var,
+            bg=COLORS["surface_elevated"],
+            fg=COLORS.get(tone, COLORS["text"]),
+            font=FONTS["kpi"],
+            anchor=tk.W,
+        ).pack(anchor=tk.W, pady=(4, 0))
+        return card
+
+    def _portfolio_configure_row_grid(self, row_frame: tk.Frame, headers: list[tuple[str, int]]):
+        for col, (_text, width) in enumerate(headers):
+            minsize = 28 if col == len(headers) - 1 else max(44, width * 7)
+            weight = 2 if col == 0 else (1 if col == 1 and len(headers) > 9 else 0)
+            row_frame.grid_columnconfigure(col, minsize=minsize, weight=weight)
+
+    def _portfolio_cell_anchor(self, sec_id: str, col: int, total_cols: int) -> str:
+        if col == 0:
+            return tk.W
+        if col == total_cols - 1:
+            return tk.CENTER
+        if sec_id == "tw" and col == 2:
+            return tk.CENTER
+        if sec_id == "us" and col == 1:
+            return tk.CENTER
+        return tk.E
+
     def _build_portfolio_tab(self):
         self.portfolio_row_containers: dict[str, tk.Frame] = {}
         self.portfolio_total_vars: dict[str, dict[str, tk.StringVar]] = {}
@@ -1786,20 +1839,36 @@ class LandingAnalysisApp(tk.Tk):
             highlightbackground=COLORS["border"],
             highlightthickness=1,
         )
-        summary_card.pack(fill=tk.X, padx=12, pady=(12, 0))
-        self.portfolio_grand_summary_var = tk.StringVar(value="尚未載入持股資料")
+        summary_card.pack(fill=tk.X, padx=16, pady=(12, 0))
+        summary_inner = tk.Frame(summary_card, bg=COLORS["surface"])
+        summary_inner.pack(fill=tk.X, padx=16, pady=14)
         tk.Label(
-            summary_card,
-            textvariable=self.portfolio_grand_summary_var,
+            summary_inner,
+            text="投資組合總覽",
             bg=COLORS["surface"],
-            fg=COLORS["text"],
-            font=FONTS["body"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(anchor=tk.W)
+        kpi_row = tk.Frame(summary_inner, bg=COLORS["surface"])
+        kpi_row.pack(fill=tk.X, pady=(8, 0))
+        self.portfolio_kpi_vars: dict[str, tk.StringVar] = {}
+        for key, caption, tone in PORTFOLIO_KPI_SPECS:
+            var = tk.StringVar(value="—")
+            self.portfolio_kpi_vars[key] = var
+            self._portfolio_kpi_card(kpi_row, caption, var, tone=tone)
+        self.portfolio_detail_var = tk.StringVar(value="")
+        tk.Label(
+            summary_inner,
+            textvariable=self.portfolio_detail_var,
+            bg=COLORS["surface"],
+            fg=COLORS["muted_light"],
+            font=FONTS["caption"],
             justify=tk.LEFT,
-            wraplength=1000,
-        ).pack(anchor=tk.W, padx=16, pady=12)
+            wraplength=980,
+        ).pack(anchor=tk.W, pady=(10, 0))
 
         content = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
-        content.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        content.pack(fill=tk.BOTH, expand=True, padx=16, pady=12)
 
         table_panel = tk.Frame(content, bg=COLORS["bg"])
         table_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -1823,22 +1892,46 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["surface"],
             highlightbackground=COLORS["border"],
             highlightthickness=1,
+            width=PORTFOLIO_CHART_WIDTH,
         )
-        chart_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(12, 0))
-        self.portfolio_pie_fig = plt.figure(figsize=(3.6, 7.2), dpi=100)
+        chart_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(16, 0))
+        chart_panel.pack_propagate(False)
+        chart_head = tk.Frame(chart_panel, bg=COLORS["surface"])
+        chart_head.pack(fill=tk.X, padx=14, pady=(12, 4))
+        tk.Label(
+            chart_head,
+            text="配置概覽",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            font=FONTS["section"],
+        ).pack(anchor=tk.W)
+        tk.Label(
+            chart_head,
+            text="台美股 · 長短線占比",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(anchor=tk.W, pady=(2, 0))
+        pie_body = tk.Frame(chart_panel, bg=COLORS["surface"])
+        pie_body.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 8))
+        self.portfolio_pie_fig = plt.figure(figsize=(2.75, 6.4), dpi=100)
         self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
         pie_grid = GridSpec(
             3,
             1,
             figure=self.portfolio_pie_fig,
             height_ratios=[1, 1, 1],
-            hspace=0.55,
+            hspace=0.78,
+            top=0.98,
+            bottom=0.03,
+            left=0.02,
+            right=0.98,
         )
         self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[0])
         self.portfolio_pie_ax_tw_pos = self.portfolio_pie_fig.add_subplot(pie_grid[1])
         self.portfolio_pie_ax_us_pos = self.portfolio_pie_fig.add_subplot(pie_grid[2])
-        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=chart_panel)
-        self.portfolio_pie_canvas.get_tk_widget().pack(padx=8, pady=8)
+        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=pie_body)
+        self.portfolio_pie_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         self.portfolio_section_frames: dict[str, tk.Frame] = {}
         for sec_id, title, color in (
@@ -1876,17 +1969,17 @@ class LandingAnalysisApp(tk.Tk):
             headers = self._portfolio_headers(sec_id)
             header_row = tk.Frame(table_wrap, bg=COLORS["tree_header"])
             header_row.pack(fill=tk.X)
+            self._portfolio_configure_row_grid(header_row, headers)
             for col, (text, width) in enumerate(headers):
                 tk.Label(
                     header_row,
                     text=text,
                     bg=COLORS["tree_header"],
-                    fg=COLORS["text"],
+                    fg=COLORS["muted_light"] if col else COLORS["text"],
                     font=FONTS["body_bold"],
-                    width=width,
-                    anchor=tk.W if col == 0 else tk.CENTER,
-                    padx=4,
-                    pady=6,
+                    anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
+                    padx=6,
+                    pady=7,
                 ).grid(row=0, column=col, sticky="ew")
 
             rows_frame = tk.Frame(table_wrap, bg=COLORS["surface"])
@@ -1894,7 +1987,8 @@ class LandingAnalysisApp(tk.Tk):
             self.portfolio_row_containers[sec_id] = rows_frame
 
             total_row = tk.Frame(table_wrap, bg=COLORS["surface_elevated"], highlightbackground=COLORS["border"], highlightthickness=1)
-            total_row.pack(fill=tk.X, pady=(4, 0))
+            total_row.pack(fill=tk.X, pady=(6, 0))
+            self._portfolio_configure_row_grid(total_row, headers)
             self.portfolio_total_vars[sec_id] = {
                 "subtotal": tk.StringVar(value="—"),
                 "twd": tk.StringVar(value="—"),
@@ -1921,37 +2015,36 @@ class LandingAnalysisApp(tk.Tk):
                     bg=COLORS["surface_elevated"],
                     fg=COLORS["text"],
                     font=FONTS["body_bold"],
-                    width=width,
-                    anchor=tk.CENTER if col else tk.W,
-                    padx=4,
+                    anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
+                    padx=6,
                     pady=8,
                 ).grid(row=0, column=col, sticky="ew")
 
     def _portfolio_headers(self, sec_id: str) -> list[tuple[str, int]]:
         if sec_id == "tw":
             return [
-                ("股票", 10),
-                ("備註", 8),
-                ("部位", 6),
-                ("股數", 7),
-                ("成本", 8),
-                ("現價", 8),
-                ("損益%", 7),
-                ("總價", 9),
-                ("比重", 7),
-                ("", 3),
+                ("股票", 9),
+                ("備註", 6),
+                ("部位", 5),
+                ("股數", 6),
+                ("成本", 7),
+                ("現價", 7),
+                ("損益%", 6),
+                ("總價", 8),
+                ("比重", 6),
+                ("", 2),
             ]
         return [
-            ("股票", 10),
-            ("部位", 6),
-            ("股數", 7),
-            ("成本", 8),
-            ("現價", 8),
-            ("損益%", 7),
-            ("總價(USD)", 9),
-            ("總價(TWD)", 9),
-            ("比重", 7),
-            ("", 3),
+            ("股票", 9),
+            ("部位", 5),
+            ("股數", 6),
+            ("成本", 7),
+            ("現價", 7),
+            ("損益%", 6),
+            ("USD", 8),
+            ("TWD", 8),
+            ("比重", 6),
+            ("", 2),
         ]
 
     def _portfolio_entry(self, parent, var: tk.Variable, *, width: int = 8) -> ttk.Entry:
@@ -2001,6 +2094,7 @@ class LandingAnalysisApp(tk.Tk):
             row = item.row
             rf = tk.Frame(container, bg=COLORS["tree_zebra"] if idx % 2 else COLORS["surface"])
             rf.pack(fill=tk.X, pady=1)
+            self._portfolio_configure_row_grid(rf, headers)
 
             name_var = tk.StringVar(value=row.name)
             note_var = tk.StringVar(value=row.note)
@@ -2015,13 +2109,13 @@ class LandingAnalysisApp(tk.Tk):
 
             col = 0
             name_entry = self._portfolio_entry(rf, name_var, width=headers[0][1])
-            name_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            name_entry.grid(row=0, column=col, padx=(6, 2), pady=4, sticky="ew")
             col += 1
 
             ref: dict = {"name": name_var, "position": pos_var, "shares": shares_var, "cost": cost_var}
             if sec_id == "tw":
                 note_entry = self._portfolio_entry(rf, note_var, width=headers[1][1])
-                note_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+                note_entry.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
                 ref["note"] = note_var
                 col += 1
 
@@ -2033,15 +2127,15 @@ class LandingAnalysisApp(tk.Tk):
                 width=headers[col][1],
                 style="Dark.TCombobox",
             )
-            pos_combo.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            pos_combo.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
             col += 1
 
             shares_entry = self._portfolio_entry(rf, shares_var, width=headers[col][1])
-            shares_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            shares_entry.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
             col += 1
 
             cost_entry = self._portfolio_entry(rf, cost_var, width=headers[col][1])
-            cost_entry.grid(row=0, column=col, padx=2, pady=3, sticky="ew")
+            cost_entry.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
             col += 1
 
             for var in (price_var, pl_var):
@@ -2051,9 +2145,10 @@ class LandingAnalysisApp(tk.Tk):
                     bg=rf["bg"],
                     fg=COLORS["muted"],
                     font=FONTS["body"],
-                    width=headers[col][1],
-                    anchor=tk.CENTER,
-                ).grid(row=0, column=col, padx=2, pady=3)
+                    anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
+                    padx=6,
+                    pady=4,
+                ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
                 col += 1
 
             tk.Label(
@@ -2062,9 +2157,10 @@ class LandingAnalysisApp(tk.Tk):
                 bg=rf["bg"],
                 fg=COLORS["text"],
                 font=FONTS["body"],
-                width=headers[col][1],
-                anchor=tk.CENTER,
-            ).grid(row=0, column=col, padx=2, pady=3)
+                anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
+                padx=6,
+                pady=4,
+            ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
             col += 1
 
             if sec_id == "us":
@@ -2074,9 +2170,10 @@ class LandingAnalysisApp(tk.Tk):
                     bg=rf["bg"],
                     fg=COLORS["text"],
                     font=FONTS["body"],
-                    width=headers[col][1],
-                    anchor=tk.CENTER,
-                ).grid(row=0, column=col, padx=2, pady=3)
+                    anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
+                    padx=6,
+                    pady=4,
+                ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
                 col += 1
 
             tk.Label(
@@ -2085,9 +2182,10 @@ class LandingAnalysisApp(tk.Tk):
                 bg=rf["bg"],
                 fg=COLORS["accent"],
                 font=FONTS["body_bold"],
-                width=headers[col][1],
-                anchor=tk.CENTER,
-            ).grid(row=0, column=col, padx=2, pady=3)
+                anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
+                padx=6,
+                pady=4,
+            ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
             col += 1
 
             tk.Button(
@@ -2100,7 +2198,7 @@ class LandingAnalysisApp(tk.Tk):
                 font=FONTS["body_bold"],
                 width=2,
                 cursor="hand2",
-            ).grid(row=0, column=col, padx=2, pady=3)
+            ).grid(row=0, column=col, padx=(2, 6), pady=4)
 
             ref.update(
                 {
@@ -2184,21 +2282,26 @@ class LandingAnalysisApp(tk.Tk):
         tw_total = calc_section(self._portfolio_section("tw")).total_twd if self._portfolio_section("tw") else 0
         us_total = calc_section(self._portfolio_section("us")).total_twd if self._portfolio_section("us") else 0
         remaining = budget - grand if budget > 0 else None
-        lines = [
-            f"投資組合總計：{grand:,.0f} TWD",
-            f"台股 {tw_total:,.0f} TWD　｜　美股 {us_total:,.0f} TWD（含匯率）",
-        ]
+
+        self.portfolio_kpi_vars["grand"].set(f"{grand:,.0f}")
+        self.portfolio_kpi_vars["tw"].set(f"{tw_total:,.0f}")
+        self.portfolio_kpi_vars["us"].set(f"{us_total:,.0f}")
         if budget > 0:
-            lines.append(f"預算 {budget:,.0f} TWD　｜　已投入 {grand / budget * 100:.2f}%")
-            if remaining is not None:
-                label = "剩餘" if remaining >= 0 else "超支"
-                lines.append(f"{label} {abs(remaining):,.0f} TWD")
+            usage = grand / budget * 100
+            remain_label = "剩餘" if remaining is not None and remaining >= 0 else "超支"
+            remain_text = f" · {remain_label} {abs(remaining or 0):,.0f}" if remaining is not None else ""
+            self.portfolio_kpi_vars["budget"].set(f"{usage:.1f}%{remain_text}")
+        else:
+            self.portfolio_kpi_vars["budget"].set("未設定")
+
+        detail_parts = []
         for sec in self._portfolio_sections:
             stats = calc_position_stats(sec)
-            lines.append(
-                f"{sec.title} 長線 {stats['long']['weight']:.1f}% / 短線 {stats['short']['weight']:.1f}%"
+            market = "台股" if sec.id == "tw" else "美股"
+            detail_parts.append(
+                f"{market} 長線 {stats['long']['weight']:.1f}% / 短線 {stats['short']['weight']:.1f}%"
             )
-        self.portfolio_grand_summary_var.set("\n".join(lines))
+        self.portfolio_detail_var.set("　｜　".join(detail_parts))
         self.portfolio_summary_var.set(
             "\n".join(
                 f"{sec.title}: {calc_section(sec).total_twd:,.0f} TWD"
@@ -2240,7 +2343,6 @@ class LandingAnalysisApp(tk.Tk):
         slices: list[PortfolioPieSlice],
         *,
         title: str | None = None,
-        compact: bool = False,
         empty_text: str = "無資料",
     ):
         ax.clear()
@@ -2248,9 +2350,10 @@ class LandingAnalysisApp(tk.Tk):
         if title:
             ax.set_title(
                 title,
-                color=COLORS["text"],
-                fontsize=8 if compact else 10,
-                pad=6 if compact else 8,
+                color=COLORS["muted_light"],
+                fontsize=8,
+                pad=2,
+                loc="center",
             )
         if not slices:
             ax.text(
@@ -2260,7 +2363,7 @@ class LandingAnalysisApp(tk.Tk):
                 ha="center",
                 va="center",
                 color=COLORS["muted"],
-                fontsize=8 if compact else 9,
+                fontsize=8,
                 transform=ax.transAxes,
             )
             ax.axis("off")
@@ -2268,29 +2371,41 @@ class LandingAnalysisApp(tk.Tk):
 
         colors = self._portfolio_pie_colors(slices)
         sizes = [s.twd for s in slices]
-        wedgeprops = {"edgecolor": COLORS["border"], "linewidth": 0.8}
-        if compact:
-            ax.pie(
-                sizes,
-                colors=colors,
-                startangle=90,
-                counterclock=False,
-                autopct=lambda pct: f"{pct:.0f}%" if pct >= 8 else "",
-                textprops={"color": COLORS["text"], "fontsize": 6},
-                wedgeprops=wedgeprops,
-            )
-        else:
-            labels = [f"{s.label}\n{s.pct:.1f}%" for s in slices]
-            ax.pie(
-                sizes,
-                labels=labels,
-                colors=colors,
-                startangle=90,
-                counterclock=False,
-                textprops={"color": COLORS["text"], "fontsize": 7},
-                wedgeprops=wedgeprops,
+        wedgeprops = {
+            "width": 0.56,
+            "edgecolor": COLORS["surface"],
+            "linewidth": 1.4,
+        }
+        wedges, _texts, autotexts = ax.pie(
+            sizes,
+            colors=colors,
+            startangle=90,
+            counterclock=False,
+            autopct=lambda pct: f"{pct:.0f}%",
+            pctdistance=0.76,
+            textprops={"color": COLORS["text"], "fontsize": 7, "weight": "bold"},
+            wedgeprops=wedgeprops,
+        )
+        for autotext in autotexts:
+            autotext.set_color(COLORS["text"])
+
+        if len(slices) <= 4:
+            ax.legend(
+                wedges,
+                [f"{s.label}" for s in slices],
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.08),
+                ncol=min(len(slices), 2),
+                fontsize=6.5,
+                frameon=False,
+                labelcolor=COLORS["muted"],
+                handlelength=0.7,
+                handletextpad=0.35,
+                columnspacing=0.8,
+                borderaxespad=0.0,
             )
         ax.axis("equal")
+        ax.set_anchor("C")
 
     def _draw_portfolio_pie(self):
         if not hasattr(self, "portfolio_pie_ax_market"):
@@ -2303,19 +2418,16 @@ class LandingAnalysisApp(tk.Tk):
             self.portfolio_pie_ax_market,
             portfolio_market_slices(self._portfolio_sections),
             title="台美股",
-            compact=True,
         )
         self._render_portfolio_pie_axis(
             self.portfolio_pie_ax_tw_pos,
             position_pie_slices(tw_sec) if tw_sec else [],
             title="台股長短",
-            compact=True,
         )
         self._render_portfolio_pie_axis(
             self.portfolio_pie_ax_us_pos,
             position_pie_slices(us_sec) if us_sec else [],
             title="美股長短",
-            compact=True,
         )
         self.portfolio_pie_canvas.draw_idle()
 
