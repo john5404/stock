@@ -2051,11 +2051,24 @@ class LandingAnalysisApp(tk.Tk):
         if row.name and row.name != prev_name:
             self._refresh_portfolio_quotes(force=True)
 
+    def _sort_portfolio_section(self, sec: PortfolioSection):
+        sec.rows.sort(
+            key=lambda r: (
+                0 if r.position != "short" else 1,
+                -(float(r.shares or 0) * float(r.cost or 0)),
+            )
+        )
+
+    def _portfolio_position_change(self, sec_id: str, row_idx: int):
+        self._portfolio_row_change(sec_id, row_idx)
+        self._render_portfolio_rows(sec_id)
+
     def _render_portfolio_rows(self, sec_id: str):
         sec = self._portfolio_section(sec_id)
         table_wrap = self.portfolio_row_containers.get(sec_id)
         if sec is None or table_wrap is None:
             return
+        self._sort_portfolio_section(sec)
         self._portfolio_clear_table_body(table_wrap)
         self.portfolio_row_refs[sec_id] = []
         headers = self._portfolio_headers(sec_id)
@@ -2189,7 +2202,7 @@ class LandingAnalysisApp(tk.Tk):
             name_entry.bind("<Return>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
             if note_entry is not None:
                 note_entry.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
-            pos_combo.bind("<<ComboboxSelected>>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
+            pos_combo.bind("<<ComboboxSelected>>", lambda _e, sid=sec_id, i=idx: self._portfolio_position_change(sid, i))
 
         self._portfolio_render_total_row(table_wrap, sec_id, len(calc.items) + 1, headers)
         self._update_portfolio_section_display(sec_id)
