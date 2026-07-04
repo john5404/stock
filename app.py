@@ -111,7 +111,12 @@ BACKTEST_MODE_CODES: dict[str, str] = {label: code for code, label in BACKTEST_M
 
 APP_MODES = ("落點分析", "股市配比")
 
-PORTFOLIO_CHART_WIDTH = 300
+SIDEBAR_PANEL_WIDTH = 252
+SIDEBAR_CONTENT_WIDTH = 236
+SIDEBAR_WRAPLENGTH = 218
+SIDEBAR_FIELD_WIDTH = 22
+PORTFOLIO_CHART_WIDTH = 450
+PORTFOLIO_PIE_FIGSIZE = (4.12, 9.6)
 PORTFOLIO_KPI_SPECS = (
     ("grand", "總資產 (TWD)", "text"),
     ("tw", "台股", "success"),
@@ -498,15 +503,15 @@ class LandingAnalysisApp(tk.Tk):
         body = tk.Frame(self, bg=COLORS["bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
 
-        left_wrap = tk.Frame(body, bg=COLORS["sidebar"], width=320, highlightbackground=COLORS["sidebar_border"], highlightthickness=1)
+        left_wrap = tk.Frame(body, bg=COLORS["sidebar"], width=SIDEBAR_PANEL_WIDTH, highlightbackground=COLORS["sidebar_border"], highlightthickness=1)
         left_wrap.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 14))
         left_wrap.pack_propagate(False)
 
-        canvas = tk.Canvas(left_wrap, width=300, bg=COLORS["sidebar"], highlightthickness=0, bd=0)
+        canvas = tk.Canvas(left_wrap, width=SIDEBAR_CONTENT_WIDTH, bg=COLORS["sidebar"], highlightthickness=0, bd=0)
         scrollbar = ttk.Scrollbar(left_wrap, orient=tk.VERTICAL, command=canvas.yview)
         left = tk.Frame(canvas, bg=COLORS["sidebar"])
         left.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=left, anchor="nw", width=300)
+        canvas.create_window((0, 0), window=left, anchor="nw", width=SIDEBAR_CONTENT_WIDTH)
         canvas.configure(yscrollcommand=scrollbar.set)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -553,7 +558,7 @@ class LandingAnalysisApp(tk.Tk):
             textvariable=self.strategy_var,
             values=list(STRATEGY_TEMPLATES.keys()),
             state="readonly",
-            width=28,
+            width=SIDEBAR_FIELD_WIDTH,
             style="Dark.TCombobox",
         )
         strat_combo.pack(fill=tk.X)
@@ -566,7 +571,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar_elevated"],
             fg=COLORS["muted_light"],
             font=FONTS["body"],
-            wraplength=250,
+            wraplength=SIDEBAR_WRAPLENGTH - 8,
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(8, 0))
 
@@ -577,7 +582,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar_elevated"],
             fg=COLORS["muted_light"],
             font=FONTS["caption"],
-            wraplength=250,
+            wraplength=SIDEBAR_WRAPLENGTH - 8,
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(4, 0))
 
@@ -590,7 +595,7 @@ class LandingAnalysisApp(tk.Tk):
         self.ticker_search_combo = ttk.Combobox(
             ticker_frame,
             textvariable=self.ticker_search_var,
-            width=28,
+            width=SIDEBAR_FIELD_WIDTH,
             style="Dark.TCombobox",
         )
         self.ticker_search_combo.pack(fill=tk.X, pady=(4, 4))
@@ -617,13 +622,13 @@ class LandingAnalysisApp(tk.Tk):
             textvariable=self.period_var,
             values=list(PERIOD_LABELS.values()),
             state="readonly",
-            width=28,
+            width=SIDEBAR_FIELD_WIDTH,
             style="Dark.TCombobox",
         ).pack(fill=tk.X, pady=(4, 8))
 
         self._sidebar_label(general, "分析視窗（交易日）").pack(anchor=tk.W)
         self.lookback_var = tk.IntVar(value=42)
-        ttk.Spinbox(general, from_=20, to=120, textvariable=self.lookback_var, width=28, style="Dark.TSpinbox").pack(
+        ttk.Spinbox(general, from_=20, to=120, textvariable=self.lookback_var, width=SIDEBAR_FIELD_WIDTH, style="Dark.TSpinbox").pack(
             fill=tk.X, pady=(4, 8)
         )
 
@@ -634,7 +639,7 @@ class LandingAnalysisApp(tk.Tk):
             textvariable=self.backtest_mode_var,
             values=list(BACKTEST_MODE_LABELS.values()),
             state="readonly",
-            width=28,
+            width=SIDEBAR_FIELD_WIDTH,
             style="Dark.TCombobox",
         ).pack(fill=tk.X, pady=(4, 0))
 
@@ -660,7 +665,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar"],
             fg=COLORS["muted"],
             font=FONTS["caption"],
-            wraplength=270,
+            wraplength=SIDEBAR_WRAPLENGTH,
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 8))
 
@@ -671,7 +676,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar"],
             fg=COLORS["muted_light"],
             font=FONTS["caption"],
-            wraplength=270,
+            wraplength=SIDEBAR_WRAPLENGTH,
             justify=tk.LEFT,
         )
         self._analysis_summary_label.pack(anchor=tk.W, pady=(6, 0))
@@ -697,7 +702,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar_elevated"],
             fg=COLORS["success"],
             font=FONTS["body_bold"],
-            wraplength=250,
+            wraplength=SIDEBAR_WRAPLENGTH - 8,
             justify=tk.LEFT,
         )
         self.status_label.pack(anchor=tk.W, padx=12, pady=(0, 8))
@@ -1702,7 +1707,7 @@ class LandingAnalysisApp(tk.Tk):
         budget_card = self._sidebar_card(parent, "預算")
         self._sidebar_label(budget_card, "總預算 (TWD)").pack(anchor=tk.W)
         self.portfolio_budget_var = tk.StringVar(value="")
-        ttk.Entry(budget_card, textvariable=self.portfolio_budget_var, width=28, style="Dark.TEntry").pack(
+        ttk.Entry(budget_card, textvariable=self.portfolio_budget_var, width=SIDEBAR_FIELD_WIDTH, style="Dark.TEntry").pack(
             fill=tk.X, pady=(4, 0)
         )
         self._sidebar_label(budget_card, "剩餘 = 預算 − 已投入（台股+美股台幣）", muted=True).pack(anchor=tk.W, pady=(4, 0))
@@ -1710,7 +1715,7 @@ class LandingAnalysisApp(tk.Tk):
         rate_card = self._sidebar_card(parent, "美股設定")
         self._sidebar_label(rate_card, "USD/TWD 匯率").pack(anchor=tk.W)
         self.portfolio_rate_var = tk.StringVar(value="31.53")
-        rate_entry = ttk.Entry(rate_card, textvariable=self.portfolio_rate_var, width=28, style="Dark.TEntry")
+        rate_entry = ttk.Entry(rate_card, textvariable=self.portfolio_rate_var, width=SIDEBAR_FIELD_WIDTH, style="Dark.TEntry")
         rate_entry.pack(fill=tk.X, pady=(4, 0))
         rate_entry.bind("<KeyRelease>", lambda _e: self._render_portfolio())
 
@@ -1736,7 +1741,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar"],
             fg=COLORS["muted"],
             font=FONTS["caption"],
-            wraplength=270,
+            wraplength=SIDEBAR_WRAPLENGTH,
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 8))
 
@@ -1747,7 +1752,7 @@ class LandingAnalysisApp(tk.Tk):
             bg=COLORS["sidebar"],
             fg=COLORS["muted_light"],
             font=FONTS["caption"],
-            wraplength=270,
+            wraplength=SIDEBAR_WRAPLENGTH,
             justify=tk.LEFT,
         ).pack(anchor=tk.W)
 
@@ -1914,7 +1919,7 @@ class LandingAnalysisApp(tk.Tk):
         ).pack(anchor=tk.W, pady=(2, 0))
         pie_body = tk.Frame(chart_panel, bg=COLORS["surface"])
         pie_body.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 8))
-        self.portfolio_pie_fig = plt.figure(figsize=(2.75, 6.4), dpi=100)
+        self.portfolio_pie_fig = plt.figure(figsize=PORTFOLIO_PIE_FIGSIZE, dpi=100)
         self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
         pie_grid = GridSpec(
             3,
@@ -2351,8 +2356,8 @@ class LandingAnalysisApp(tk.Tk):
             ax.set_title(
                 title,
                 color=COLORS["muted_light"],
-                fontsize=8,
-                pad=2,
+                fontsize=9,
+                pad=3,
                 loc="center",
             )
         if not slices:
@@ -2383,7 +2388,7 @@ class LandingAnalysisApp(tk.Tk):
             counterclock=False,
             autopct=lambda pct: f"{pct:.0f}%",
             pctdistance=0.76,
-            textprops={"color": COLORS["text"], "fontsize": 7, "weight": "bold"},
+            textprops={"color": COLORS["text"], "fontsize": 8.5, "weight": "bold"},
             wedgeprops=wedgeprops,
         )
         for autotext in autotexts:
@@ -2396,7 +2401,7 @@ class LandingAnalysisApp(tk.Tk):
                 loc="upper center",
                 bbox_to_anchor=(0.5, -0.08),
                 ncol=min(len(slices), 2),
-                fontsize=6.5,
+                fontsize=7.5,
                 frameon=False,
                 labelcolor=COLORS["muted"],
                 handlelength=0.7,
