@@ -50,7 +50,6 @@ from landing_analysis.portfolio_store import (
     default_portfolio_path,
     fetch_quotes,
     load_portfolio,
-    portfolio_pie_slices,
     portfolio_market_slices,
     portfolio_total_twd,
     position_pie_slices,
@@ -1787,42 +1786,37 @@ class LandingAnalysisApp(tk.Tk):
             highlightbackground=COLORS["border"],
             highlightthickness=1,
         )
-        summary_card.pack(fill=tk.X, padx=12, pady=(12, 0))
+        summary_card.pack(fill=tk.X, padx=12, pady=12)
+        summary_inner = tk.Frame(summary_card, bg=COLORS["surface"])
+        summary_inner.pack(fill=tk.X, padx=16, pady=12)
+
         self.portfolio_grand_summary_var = tk.StringVar(value="尚未載入持股資料")
         tk.Label(
-            summary_card,
+            summary_inner,
             textvariable=self.portfolio_grand_summary_var,
             bg=COLORS["surface"],
             fg=COLORS["text"],
             font=FONTS["body"],
             justify=tk.LEFT,
-            wraplength=1000,
-        ).pack(anchor=tk.W, padx=16, pady=12)
+            wraplength=640,
+        ).pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand=True)
 
-        chart_card = tk.Frame(
-            self.portfolio_main,
-            bg=COLORS["surface"],
-            highlightbackground=COLORS["border"],
-            highlightthickness=1,
-        )
-        chart_card.pack(fill=tk.X, padx=12, pady=12)
-        self.portfolio_pie_fig = plt.figure(figsize=(10.5, 4.8), dpi=100)
+        pie_wrap = tk.Frame(summary_inner, bg=COLORS["surface"])
+        pie_wrap.pack(side=tk.RIGHT, padx=(12, 0))
+        self.portfolio_pie_fig = plt.figure(figsize=(3.4, 5.6), dpi=100)
         self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
         pie_grid = GridSpec(
             3,
-            2,
+            1,
             figure=self.portfolio_pie_fig,
-            width_ratios=[2.4, 1],
             height_ratios=[1, 1, 1],
-            hspace=0.45,
-            wspace=0.2,
+            hspace=0.55,
         )
-        self.portfolio_pie_ax_main = self.portfolio_pie_fig.add_subplot(pie_grid[:, 0])
-        self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[0, 1])
-        self.portfolio_pie_ax_tw_pos = self.portfolio_pie_fig.add_subplot(pie_grid[1, 1])
-        self.portfolio_pie_ax_us_pos = self.portfolio_pie_fig.add_subplot(pie_grid[2, 1])
-        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=chart_card)
-        self.portfolio_pie_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self.portfolio_pie_ax_market = self.portfolio_pie_fig.add_subplot(pie_grid[0])
+        self.portfolio_pie_ax_tw_pos = self.portfolio_pie_fig.add_subplot(pie_grid[1])
+        self.portfolio_pie_ax_us_pos = self.portfolio_pie_fig.add_subplot(pie_grid[2])
+        self.portfolio_pie_canvas = FigureCanvasTkAgg(self.portfolio_pie_fig, master=pie_wrap)
+        self.portfolio_pie_canvas.get_tk_widget().pack()
 
         body = tk.Frame(self.portfolio_main, bg=COLORS["bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
@@ -2290,19 +2284,12 @@ class LandingAnalysisApp(tk.Tk):
         ax.axis("equal")
 
     def _draw_portfolio_pie(self):
-        if not hasattr(self, "portfolio_pie_ax_main"):
+        if not hasattr(self, "portfolio_pie_ax_market"):
             return
         self.portfolio_pie_fig.patch.set_facecolor(COLORS["surface"])
 
         tw_sec = self._portfolio_section("tw")
         us_sec = self._portfolio_section("us")
-        self._render_portfolio_pie_axis(
-            self.portfolio_pie_ax_main,
-            portfolio_pie_slices(self._portfolio_sections),
-            title="投資組合",
-            compact=False,
-            empty_text="無持股資料",
-        )
         self._render_portfolio_pie_axis(
             self.portfolio_pie_ax_market,
             portfolio_market_slices(self._portfolio_sections),
