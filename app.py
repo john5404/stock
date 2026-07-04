@@ -117,6 +117,10 @@ SIDEBAR_WRAPLENGTH = 218
 SIDEBAR_FIELD_WIDTH = 22
 PORTFOLIO_CHART_WIDTH = 450
 PORTFOLIO_PIE_FIGSIZE = (4.12, 9.6)
+PORTFOLIO_COL_WIDTHS = {
+    "tw": (100, 80, 48, 56, 64, 64, 56, 80, 52, 32),
+    "us": (100, 48, 56, 64, 64, 56, 80, 80, 52, 32),
+}
 PORTFOLIO_KPI_SPECS = (
     ("grand", "總資產 (TWD)", "text"),
     ("tw", "台股", "success"),
@@ -1784,11 +1788,15 @@ class LandingAnalysisApp(tk.Tk):
         ).pack(anchor=tk.W, pady=(4, 0))
         return card
 
-    def _portfolio_configure_row_grid(self, row_frame: tk.Frame, headers: list[tuple[str, int]]):
-        for col, (_text, width) in enumerate(headers):
-            minsize = 28 if col == len(headers) - 1 else max(44, width * 7)
-            weight = 2 if col == 0 else (1 if col == 1 and len(headers) > 9 else 0)
-            row_frame.grid_columnconfigure(col, minsize=minsize, weight=weight)
+    def _portfolio_configure_table_grid(self, table_wrap: tk.Frame, sec_id: str):
+        widths = PORTFOLIO_COL_WIDTHS[sec_id]
+        for col, width in enumerate(widths):
+            table_wrap.grid_columnconfigure(col, minsize=width, weight=1 if col == 0 else 0)
+
+    def _portfolio_clear_table_body(self, table_wrap: tk.Frame):
+        for child in table_wrap.grid_slaves():
+            if int(child.grid_info().get("row", 0)) >= 1:
+                child.destroy()
 
     def _portfolio_cell_anchor(self, sec_id: str, col: int, total_cols: int) -> str:
         if col == 0:
@@ -1972,89 +1980,107 @@ class LandingAnalysisApp(tk.Tk):
             table_wrap.pack(fill=tk.X, padx=8, pady=(0, 8))
 
             headers = self._portfolio_headers(sec_id)
-            header_row = tk.Frame(table_wrap, bg=COLORS["tree_header"])
-            header_row.pack(fill=tk.X)
-            self._portfolio_configure_row_grid(header_row, headers)
-            for col, (text, width) in enumerate(headers):
+            self._portfolio_configure_table_grid(table_wrap, sec_id)
+            for col, text in enumerate(headers):
                 tk.Label(
-                    header_row,
+                    table_wrap,
                     text=text,
                     bg=COLORS["tree_header"],
                     fg=COLORS["muted_light"] if col else COLORS["text"],
                     font=FONTS["body_bold"],
                     anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
-                    padx=6,
+                    padx=4,
                     pady=7,
-                ).grid(row=0, column=col, sticky="ew")
+                ).grid(row=0, column=col, sticky="nsew", padx=1, pady=(0, 1))
 
-            rows_frame = tk.Frame(table_wrap, bg=COLORS["surface"])
-            rows_frame.pack(fill=tk.X)
-            self.portfolio_row_containers[sec_id] = rows_frame
-
-            total_row = tk.Frame(table_wrap, bg=COLORS["surface_elevated"], highlightbackground=COLORS["border"], highlightthickness=1)
-            total_row.pack(fill=tk.X, pady=(6, 0))
-            self._portfolio_configure_row_grid(total_row, headers)
+            self.portfolio_row_containers[sec_id] = table_wrap
             self.portfolio_total_vars[sec_id] = {
                 "subtotal": tk.StringVar(value="—"),
                 "twd": tk.StringVar(value="—"),
                 "weight": tk.StringVar(value="100%"),
             }
-            for col, (_header, width) in enumerate(headers):
-                if col == 0:
-                    text_var: tk.StringVar | None = tk.StringVar(value="合計")
-                elif sec_id == "tw" and col == 7:
-                    text_var = self.portfolio_total_vars[sec_id]["subtotal"]
-                elif sec_id == "tw" and col == 8:
-                    text_var = self.portfolio_total_vars[sec_id]["weight"]
-                elif sec_id == "us" and col == 6:
-                    text_var = self.portfolio_total_vars[sec_id]["subtotal"]
-                elif sec_id == "us" and col == 7:
-                    text_var = self.portfolio_total_vars[sec_id]["twd"]
-                elif sec_id == "us" and col == 8:
-                    text_var = self.portfolio_total_vars[sec_id]["weight"]
-                else:
-                    text_var = tk.StringVar(value="")
+
+    def _portfolio_headers(self, sec_id: str) -> list[str]:
+        if sec_id == "tw":
+            return ["股票", "備註", "部位", "股數", "成本", "現價", "損益%", "總價", "比重", ""]
+        return ["股票", "部位", "股數", "成本", "現價", "損益%", "USD", "TWD", "比重", ""]
+
+    def _portfolio_entry(self, parent, var: tk.Variable) -> ttk.Entry:
+        return ttk.Entry(parent, textvariable=var, style="Dark.TEntry")
+
+    def _portfolio_render_total_row(self, table_wrap: tk.Frame, sec_id: str, grid_row: int, headers: list[str]):
+        totals = self.portfolio_total_vars[sec_id]
+        bg = COLORS["surface_elevated"]
+        for col in range(len(headers)):
+            anchor = self._portfolio_cell_anchor(sec_id, col, len(headers))
+            if col == 0:
                 tk.Label(
-                    total_row,
-                    textvariable=text_var,
-                    bg=COLORS["surface_elevated"],
+                    table_wrap,
+                    text="合計",
+                    bg=bg,
                     fg=COLORS["text"],
                     font=FONTS["body_bold"],
-                    anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
-                    padx=6,
+                    anchor=anchor,
+                    padx=4,
                     pady=8,
-                ).grid(row=0, column=col, sticky="ew")
-
-    def _portfolio_headers(self, sec_id: str) -> list[tuple[str, int]]:
-        if sec_id == "tw":
-            return [
-                ("股票", 9),
-                ("備註", 6),
-                ("部位", 5),
-                ("股數", 6),
-                ("成本", 7),
-                ("現價", 7),
-                ("損益%", 6),
-                ("總價", 8),
-                ("比重", 6),
-                ("", 2),
-            ]
-        return [
-            ("股票", 9),
-            ("部位", 5),
-            ("股數", 6),
-            ("成本", 7),
-            ("現價", 7),
-            ("損益%", 6),
-            ("USD", 8),
-            ("TWD", 8),
-            ("比重", 6),
-            ("", 2),
-        ]
-
-    def _portfolio_entry(self, parent, var: tk.Variable, *, width: int = 8) -> ttk.Entry:
-        entry = ttk.Entry(parent, textvariable=var, width=width, style="Dark.TEntry")
-        return entry
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            elif sec_id == "tw" and col == 7:
+                tk.Label(
+                    table_wrap,
+                    textvariable=totals["subtotal"],
+                    bg=bg,
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    anchor=anchor,
+                    padx=4,
+                    pady=8,
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            elif sec_id == "tw" and col == 8:
+                tk.Label(
+                    table_wrap,
+                    textvariable=totals["weight"],
+                    bg=bg,
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    anchor=anchor,
+                    padx=4,
+                    pady=8,
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            elif sec_id == "us" and col == 6:
+                tk.Label(
+                    table_wrap,
+                    textvariable=totals["subtotal"],
+                    bg=bg,
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    anchor=anchor,
+                    padx=4,
+                    pady=8,
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            elif sec_id == "us" and col == 7:
+                tk.Label(
+                    table_wrap,
+                    textvariable=totals["twd"],
+                    bg=bg,
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    anchor=anchor,
+                    padx=4,
+                    pady=8,
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            elif sec_id == "us" and col == 8:
+                tk.Label(
+                    table_wrap,
+                    textvariable=totals["weight"],
+                    bg=bg,
+                    fg=COLORS["text"],
+                    font=FONTS["body_bold"],
+                    anchor=anchor,
+                    padx=4,
+                    pady=8,
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
+            else:
+                tk.Label(table_wrap, text="", bg=bg).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
 
     def _portfolio_row_change(self, sec_id: str, row_idx: int):
         refs = self.portfolio_row_refs.get(sec_id, [])
@@ -2085,11 +2111,10 @@ class LandingAnalysisApp(tk.Tk):
 
     def _render_portfolio_rows(self, sec_id: str):
         sec = self._portfolio_section(sec_id)
-        container = self.portfolio_row_containers.get(sec_id)
-        if sec is None or container is None:
+        table_wrap = self.portfolio_row_containers.get(sec_id)
+        if sec is None or table_wrap is None:
             return
-        for child in container.winfo_children():
-            child.destroy()
+        self._portfolio_clear_table_body(table_wrap)
         self.portfolio_row_refs[sec_id] = []
         headers = self._portfolio_headers(sec_id)
         calc = calc_section(sec)
@@ -2097,9 +2122,8 @@ class LandingAnalysisApp(tk.Tk):
 
         for idx, item in enumerate(calc.items):
             row = item.row
-            rf = tk.Frame(container, bg=COLORS["tree_zebra"] if idx % 2 else COLORS["surface"])
-            rf.pack(fill=tk.X, pady=1)
-            self._portfolio_configure_row_grid(rf, headers)
+            grid_row = idx + 1
+            row_bg = COLORS["tree_zebra"] if idx % 2 else COLORS["surface"]
 
             name_var = tk.StringVar(value=row.name)
             note_var = tk.StringVar(value=row.note)
@@ -2113,97 +2137,98 @@ class LandingAnalysisApp(tk.Tk):
             weight_var = tk.StringVar(value=f"{item.weight:.2f}%")
 
             col = 0
-            name_entry = self._portfolio_entry(rf, name_var, width=headers[0][1])
-            name_entry.grid(row=0, column=col, padx=(6, 2), pady=4, sticky="ew")
+            name_entry = self._portfolio_entry(table_wrap, name_var)
+            name_entry.grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
             col += 1
 
             ref: dict = {"name": name_var, "position": pos_var, "shares": shares_var, "cost": cost_var}
+            note_entry = None
             if sec_id == "tw":
-                note_entry = self._portfolio_entry(rf, note_var, width=headers[1][1])
-                note_entry.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+                note_entry = self._portfolio_entry(table_wrap, note_var)
+                note_entry.grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
                 ref["note"] = note_var
                 col += 1
 
             pos_combo = ttk.Combobox(
-                rf,
+                table_wrap,
                 textvariable=pos_var,
                 values=["長線", "短線"],
                 state="readonly",
-                width=headers[col][1],
+                width=4,
                 style="Dark.TCombobox",
             )
-            pos_combo.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+            pos_combo.grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
             col += 1
 
-            shares_entry = self._portfolio_entry(rf, shares_var, width=headers[col][1])
-            shares_entry.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+            shares_entry = self._portfolio_entry(table_wrap, shares_var)
+            shares_entry.grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
             col += 1
 
-            cost_entry = self._portfolio_entry(rf, cost_var, width=headers[col][1])
-            cost_entry.grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+            cost_entry = self._portfolio_entry(table_wrap, cost_var)
+            cost_entry.grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
             col += 1
 
             for var in (price_var, pl_var):
                 tk.Label(
-                    rf,
+                    table_wrap,
                     textvariable=var,
-                    bg=rf["bg"],
+                    bg=row_bg,
                     fg=COLORS["muted"],
                     font=FONTS["body"],
                     anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
-                    padx=6,
+                    padx=4,
                     pady=4,
-                ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
                 col += 1
 
             tk.Label(
-                rf,
+                table_wrap,
                 textvariable=total_var,
-                bg=rf["bg"],
+                bg=row_bg,
                 fg=COLORS["text"],
                 font=FONTS["body"],
                 anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
-                padx=6,
+                padx=4,
                 pady=4,
-            ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+            ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
             col += 1
 
             if sec_id == "us":
                 tk.Label(
-                    rf,
+                    table_wrap,
                     textvariable=twd_var,
-                    bg=rf["bg"],
+                    bg=row_bg,
                     fg=COLORS["text"],
                     font=FONTS["body"],
                     anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
-                    padx=6,
+                    padx=4,
                     pady=4,
-                ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+                ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
                 col += 1
 
             tk.Label(
-                rf,
+                table_wrap,
                 textvariable=weight_var,
-                bg=rf["bg"],
+                bg=row_bg,
                 fg=COLORS["accent"],
                 font=FONTS["body_bold"],
                 anchor=self._portfolio_cell_anchor(sec_id, col, len(headers)),
-                padx=6,
+                padx=4,
                 pady=4,
-            ).grid(row=0, column=col, padx=2, pady=4, sticky="ew")
+            ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
             col += 1
 
             tk.Button(
-                rf,
+                table_wrap,
                 text="×",
                 command=lambda sid=sec_id, i=idx: self._portfolio_delete_row(sid, i),
-                bg=rf["bg"],
+                bg=row_bg,
                 fg=COLORS["danger"],
                 relief=tk.FLAT,
                 font=FONTS["body_bold"],
                 width=2,
                 cursor="hand2",
-            ).grid(row=0, column=col, padx=(2, 6), pady=4)
+            ).grid(row=grid_row, column=col, sticky="nsew", padx=1, pady=1)
 
             ref.update(
                 {
@@ -2213,7 +2238,6 @@ class LandingAnalysisApp(tk.Tk):
                     "total": total_var,
                     "twd": twd_var,
                     "weight": weight_var,
-                    "frame": rf,
                 }
             )
             self.portfolio_row_refs[sec_id].append(ref)
@@ -2221,10 +2245,11 @@ class LandingAnalysisApp(tk.Tk):
             for widget in (name_entry, shares_entry, cost_entry):
                 widget.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
             name_entry.bind("<Return>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
-            if sec_id == "tw":
+            if note_entry is not None:
                 note_entry.bind("<FocusOut>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
             pos_combo.bind("<<ComboboxSelected>>", lambda _e, sid=sec_id, i=idx: self._portfolio_row_change(sid, i))
 
+        self._portfolio_render_total_row(table_wrap, sec_id, len(calc.items) + 1, headers)
         self._update_portfolio_section_display(sec_id)
 
     def _update_portfolio_section_display(self, sec_id: str):
