@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.gridspec import GridSpec
-from matplotlib.lines import Line2D
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -1576,17 +1575,6 @@ class LandingAnalysisApp(tk.Tk):
     def _draw_empty_chart(self):
         self.ax.clear()
         self.ax.set_facecolor(COLORS["chart_bg"])
-        self.ax.set_title("交易走勢", color=COLORS["muted"], pad=12)
-        self.ax.text(
-            0.5,
-            0.5,
-            "載入資料並執行回測後，這裡會顯示近 180 日走勢與買賣點",
-            transform=self.ax.transAxes,
-            ha="center",
-            va="center",
-            color=COLORS["muted"],
-            fontsize=10,
-        )
         self.ax.grid(True, alpha=0.2)
         for spine in self.ax.spines.values():
             spine.set_color(COLORS["border"])
@@ -1601,7 +1589,7 @@ class LandingAnalysisApp(tk.Tk):
         source = self.df_enriched if self.df_enriched is not None else self.df
         plot_df = ensure_indicators(source.tail(180))
         dates = plot_df.index
-        self.ax.plot(dates, plot_df["Close"], color=COLORS["accent_dark"], linewidth=2.2, label="Close", zorder=3)
+        self.ax.plot(dates, plot_df["Close"], color=COLORS["accent_dark"], linewidth=2.2, label="Price", zorder=3)
         if plot_df["MA20"].notna().any():
             self.ax.plot(dates, plot_df["MA20"], color="#9a7a45", linewidth=1.2, alpha=0.7, label="MA20", zorder=2)
         if plot_df["MA50"].notna().any():
@@ -1639,16 +1627,6 @@ class LandingAnalysisApp(tk.Tk):
                     linewidth=1,
                     zorder=4,
                 )
-        legend_items = [
-            Line2D([0], [0], color=COLORS["accent_dark"], linewidth=2.2, label="Close"),
-            Line2D([0], [0], color="#9a7a45", linewidth=1.2, label="MA20"),
-            Line2D([0], [0], color="#4a8f6e", linewidth=1.2, label="MA50"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["success"], markersize=8, label="Buy"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["danger"], markersize=8, label="Sell"),
-        ]
-        self.ax.legend(handles=legend_items, loc="upper left", frameon=True, fancybox=True, framealpha=0.95,
-                       facecolor=COLORS["surface"], edgecolor=COLORS["border"], labelcolor=COLORS["text"])
-        self.ax.set_title(f"{self.ticker}  ·  {self.strategy_var.get()}", color=COLORS["text"], pad=12)
         self.ax.grid(True, alpha=0.2)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
         for spine in self.ax.spines.values():

@@ -5,7 +5,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import matplotlib.dates as mdates
-from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 from .analyzer import AnalysisResult, LevelCluster
@@ -66,14 +65,14 @@ def level_label_text(price: float, span: float, stars: str, methods: list[str], 
     return head
 
 
-def apply_price_axis_format(ax, colors: dict):
+def apply_price_axis_format(ax, colors: dict, *, show_ylabel: bool = False):
     ymin, ymax = ax.get_ylim()
     span = max(ymax - ymin, 1e-9)
     decimals = decimals_for_price_span(span)
 
     ax.yaxis.set_major_locator(MaxNLocator(nbins=9, min_n_ticks=5))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _p: f"{v:,.{decimals}f}"))
-    ax.set_ylabel("價格", color=colors["text"], fontsize=10, labelpad=10)
+    ax.set_ylabel("價格" if show_ylabel else "", color=colors["text"], fontsize=10, labelpad=10)
     ax.tick_params(axis="y", colors=colors["text"], labelsize=9, pad=4)
     ax.tick_params(axis="x", colors=colors["muted"], labelsize=8)
 
@@ -310,7 +309,7 @@ def draw_scheme_c(
 
     # --- Price + landing lines ---
     dates = plot_df.index
-    ax_price.plot(dates, plot_df["Close"], color=colors["accent_dark"], linewidth=2.0, label="Close", zorder=4)
+    ax_price.plot(dates, plot_df["Close"], color=colors["accent_dark"], linewidth=2.0, label="Price", zorder=4)
     if plot_df["MA20"].notna().any():
         ax_price.plot(dates, plot_df["MA20"], color="#9a7a45", linewidth=1.1, alpha=0.7, label="MA20", zorder=3)
 
@@ -378,22 +377,7 @@ def draw_scheme_c(
     )
     ax_price._current_price_value = current
     apply_price_axis_format(ax_price, colors)
-    ax_price.set_title(
-        f"{ticker} · {strategy_name} · 價格走勢 + 落點線",
-        color=colors["text"],
-        fontsize=11,
-        fontweight="bold",
-        pad=10,
-    )
     ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
-    legend_items = [
-        Line2D([0], [0], color=colors["accent_dark"], linewidth=2, label="Close"),
-        Line2D([0], [0], color="#9a7a45", linewidth=1.2, label="MA20"),
-        Line2D([0], [0], color=colors["success"], linestyle="--", linewidth=1.5, label="支撐"),
-        Line2D([0], [0], color=colors["danger"], linestyle="--", linewidth=1.5, label="阻力"),
-    ]
-    ax_price.legend(handles=legend_items, loc="upper left", fontsize=7, framealpha=0.92,
-                    facecolor=colors["surface"], edgecolor=colors["border"], labelcolor=colors["text"])
 
     # --- Price ladder ---
     y_min, y_max = _price_band(all_levels, current)
