@@ -459,50 +459,9 @@ class LandingAnalysisApp(tk.Tk):
         canvas.bind("<Leave>", _unbind)
 
     def _build_ui(self):
-        header = tk.Frame(self, bg=COLORS["surface"], highlightbackground=COLORS["border"], highlightthickness=1)
-        header.pack(fill=tk.X)
-
-        header_inner = tk.Frame(header, bg=COLORS["surface"])
-        header_inner.pack(fill=tk.X, padx=20, pady=14)
-
-        brand = tk.Frame(header_inner, bg=COLORS["accent"], width=4)
-        brand.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 14))
-
-        title_block = tk.Frame(header_inner, bg=COLORS["surface"])
-        title_block.pack(side=tk.LEFT, fill=tk.Y)
-        tk.Label(
-            title_block,
-            text="Landing Point Analyzer · 支撐阻力 · 策略回測 · 持股配比",
-            bg=COLORS["surface"],
-            fg=COLORS["muted"],
-            font=FONTS["subtitle"],
-        ).pack(anchor="w")
-
         self.header_ticker_var = tk.StringVar(value="尚未載入")
         self.market_badge_var = tk.StringVar(value="")
-        header_meta = tk.Frame(header_inner, bg=COLORS["surface"])
-        header_meta.pack(side=tk.RIGHT)
-
-        self.market_badge_label = tk.Label(
-            header_meta,
-            textvariable=self.market_badge_var,
-            bg=COLORS["surface_elevated"],
-            fg=COLORS["muted"],
-            font=FONTS["caption"],
-            padx=10,
-            pady=6,
-        )
-        self.market_badge_label.pack(side=tk.RIGHT, padx=(0, 8))
-
-        tk.Label(
-            header_meta,
-            textvariable=self.header_ticker_var,
-            bg=COLORS["accent_soft"],
-            fg=COLORS["accent"],
-            font=FONTS["body_bold"],
-            padx=14,
-            pady=6,
-        ).pack(side=tk.RIGHT)
+        self.market_badge_label = tk.Label(self, textvariable=self.market_badge_var)
 
         body = tk.Frame(self, bg=COLORS["bg"])
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
