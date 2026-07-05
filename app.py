@@ -1041,7 +1041,8 @@ class LandingAnalysisApp(tk.Tk):
         cols = ("price", "strength", "methods")
         tree = ttk.Treeview(wrap, columns=cols, show="headings", height=6, style="Custom.Treeview")
         headers = {"price": "價位", "strength": "強度 ★", "methods": "曲線來源"}
-        widths = {"price": 72, "strength": 44, "methods": 148}
+        # Keep strength text fully visible (e.g., "★★★★★ (9)").
+        widths = {"price": 68, "strength": 92, "methods": 110}
         for col in cols:
             tree.heading(col, text=headers[col])
             anchor = tk.CENTER if col != "methods" else tk.W
