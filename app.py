@@ -466,10 +466,6 @@ class LandingAnalysisApp(tk.Tk):
 
     def _sync_ticker_from_search(self):
         selected = self.ticker_search_var.get().strip()
-        if selected in self._ticker_catalog:
-            self.custom_ticker_var.set(self._ticker_catalog[selected])
-        elif selected:
-            self.custom_ticker_var.set(normalize_ticker_input(selected))
         self._update_market_badge(selected)
 
     def _bind_shortcuts(self):
@@ -585,21 +581,25 @@ class LandingAnalysisApp(tk.Tk):
         ticker_frame = self._sidebar_card(self.analysis_sidebar, "標的")
 
         self._sidebar_label(ticker_frame, "股票代號 / 名稱").pack(anchor=tk.W)
-        self.ticker_search_var = tk.StringVar()
-        self.custom_ticker_var = tk.StringVar(value="AMAT")
-        self.ticker_search_combo = ttk.Combobox(
+        self.ticker_search_var = tk.StringVar(value="AMAT")
+        ticker_entry = tk.Entry(
             ticker_frame,
             textvariable=self.ticker_search_var,
-            width=SIDEBAR_FIELD_WIDTH,
-            style="Dark.TCombobox",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=COLORS["border"],
+            highlightcolor=COLORS["accent"],
+            font=FONTS["body"],
         )
-        self.ticker_search_combo.pack(fill=tk.X, pady=(4, 4))
-        self.ticker_search_combo.bind("<<ComboboxSelected>>", self._on_ticker_search_select)
-        self.ticker_search_combo.bind("<KeyRelease>", self._on_ticker_search_key)
-        self.ticker_search_combo.bind("<Return>", self._on_ticker_search_enter)
+        ticker_entry.pack(fill=tk.X, pady=(4, 4), ipady=4)
+        ticker_entry.bind("<KeyRelease>", self._on_ticker_search_key)
+        ticker_entry.bind("<Return>", self._on_ticker_search_enter)
         self._sidebar_label(
             ticker_frame,
-            "輸入中文或數字→台股，英文→美股 · Enter 載入",
+            "純輸入股票代號：數字→台股，英文→美股 · Enter 載入",
             muted=True,
         ).pack(anchor=tk.W, pady=(0, 0))
 
@@ -906,45 +906,15 @@ class LandingAnalysisApp(tk.Tk):
             catalog = self._catalog_for_query(self.ticker_search_var.get())
         self._ticker_catalog = catalog
         self._ticker_search_values = list(catalog.keys())
-        self.ticker_search_combo["values"] = self._ticker_search_values
-
-        prev_symbol = self.custom_ticker_var.get().strip()
         prev_query = self.ticker_search_var.get().strip()
 
-        if preserve and (prev_symbol or prev_query):
-            if prev_symbol:
-                for label, symbol in catalog.items():
-                    if symbol.upper() == prev_symbol.upper():
-                        self.ticker_search_var.set(label)
-                        self.custom_ticker_var.set(symbol)
-                        self._update_market_badge(label)
-                        return
-            if prev_query in catalog:
-                self.ticker_search_var.set(prev_query)
-                self.custom_ticker_var.set(catalog[prev_query])
-                self._update_market_badge(prev_query)
-                return
-            for label, symbol in catalog.items():
-                if prev_query and (
-                    prev_query.lower() in label.lower() or prev_query.upper() == symbol.upper()
-                ):
-                    self.ticker_search_var.set(label)
-                    self.custom_ticker_var.set(symbol)
-                    self._update_market_badge(label)
-                    return
-            resolved = prev_symbol or normalize_ticker_input(prev_query)
-            self.ticker_search_var.set(prev_query or prev_symbol)
-            self.custom_ticker_var.set(resolved)
-            self._update_market_badge(prev_query or prev_symbol)
+        if preserve and prev_query:
+            self._update_market_badge(prev_query)
             return
 
-        if catalog:
-            first_label = next(iter(catalog))
-            self.ticker_search_var.set(first_label)
-            self.custom_ticker_var.set(catalog[first_label])
-        else:
-            self.ticker_search_var.set("")
-            self.custom_ticker_var.set("")
+        if catalog and not prev_query:
+            first_symbol = next(iter(catalog.values()))
+            self.ticker_search_var.set(first_symbol)
         self._update_market_badge(self.ticker_search_var.get())
 
     def _filter_ticker_search_values(self, query: str) -> list[str]:
@@ -961,12 +931,7 @@ class LandingAnalysisApp(tk.Tk):
         if _event is not None and _event.keysym in ("Up", "Down", "Return", "Tab"):
             return
         query = self.ticker_search_var.get()
-        catalog = self._catalog_for_query(query)
-        self._ticker_catalog = catalog
-        self._ticker_search_values = list(catalog.keys())
-        filtered = self._filter_ticker_search_values(query)
-        self.ticker_search_combo["values"] = filtered
-        self._sync_ticker_from_search()
+        self._update_market_badge(query)
 
     def _on_ticker_search_enter(self, _event=None):
         if self._busy:
@@ -978,13 +943,11 @@ class LandingAnalysisApp(tk.Tk):
     def _on_ticker_search_select(self, _event=None):
         selected = self.ticker_search_var.get()
         if selected in self._ticker_catalog:
-            self.custom_ticker_var.set(self._ticker_catalog[selected])
             self._update_market_badge(selected)
             return
         for label, symbol in self._ticker_catalog.items():
             if selected.lower() in label.lower() or selected.upper() == symbol.upper():
-                self.ticker_search_var.set(label)
-                self.custom_ticker_var.set(symbol)
+                self.ticker_search_var.set(symbol)
                 self._update_market_badge(label)
                 return
         self._sync_ticker_from_search()
@@ -1494,14 +1457,11 @@ class LandingAnalysisApp(tk.Tk):
 
     def _resolve_ticker(self) -> str:
         query = self.ticker_search_var.get().strip()
-        if query:
-            if query in self._ticker_catalog:
-                return self._ticker_catalog[query]
-            return normalize_ticker_input(query)
-        manual = self.custom_ticker_var.get().strip()
-        if manual:
-            return normalize_ticker_input(manual)
-        return ""
+        if not query:
+            return ""
+        if query in self._ticker_catalog:
+            return self._ticker_catalog[query]
+        return normalize_ticker_input(query)
 
     def _set_status(self, text: str, *, tone: str = "info"):
         color = {
