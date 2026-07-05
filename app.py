@@ -177,6 +177,7 @@ class LandingAnalysisApp(tk.Tk):
         self._action_buttons: list[tk.Button] = []
         self._busy = False
         self._inst_note = ""
+        self.level_details_text: tk.Text | None = None
         self._portfolio_sections: list[PortfolioSection] = []
         self._portfolio_quotes: dict[str, dict] = {}
         self._portfolio_path = default_portfolio_path()
@@ -1047,8 +1048,46 @@ class LandingAnalysisApp(tk.Tk):
             tree.column(col, width=widths[col], anchor=anchor, stretch=(col == "methods"))
         tree.tag_configure(tag, foreground=tag_color)
         tree.tag_configure("even", background=COLORS["tree_zebra"])
-        tree.pack(fill=tk.BOTH, expand=True)
+        yscroll = ttk.Scrollbar(wrap, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=yscroll.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        yscroll.pack(side=tk.RIGHT, fill=tk.Y)
         return tree
+
+    def _build_level_details_panel(self, parent: tk.Frame) -> None:
+        panel = tk.Frame(
+            parent,
+            bg=COLORS["surface_elevated"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        panel.pack(fill=tk.BOTH, expand=True, padx=4, pady=(0, 8))
+        tk.Label(
+            panel,
+            text="支撐/阻力完整說明（圖表每一條線）",
+            bg=COLORS["surface_elevated"],
+            fg=COLORS["text"],
+            font=FONTS["body_bold"],
+        ).pack(anchor=tk.W, padx=8, pady=(6, 4))
+        body = tk.Frame(panel, bg=COLORS["surface_elevated"])
+        body.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 6))
+        self.level_details_text = tk.Text(
+            body,
+            height=9,
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
+            relief=tk.FLAT,
+            wrap=tk.WORD,
+            font=FONTS["caption"],
+            padx=6,
+            pady=6,
+        )
+        details_scroll = ttk.Scrollbar(body, orient=tk.VERTICAL, command=self.level_details_text.yview)
+        self.level_details_text.configure(yscrollcommand=details_scroll.set)
+        self.level_details_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        details_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.level_details_text.configure(state=tk.DISABLED)
 
     def _build_levels_tab(self):
         toolbar = tk.Frame(self.levels_frame, bg=COLORS["bg"])
@@ -1130,6 +1169,7 @@ class LandingAnalysisApp(tk.Tk):
             tag="resistance",
             tag_color=COLORS["danger"],
         )
+        self._build_level_details_panel(tables_col)
 
         chart_card = tk.Frame(
             levels_body,
@@ -1642,6 +1682,10 @@ class LandingAnalysisApp(tk.Tk):
         for tree in (self.support_tree, self.resistance_tree):
             for item in tree.get_children():
                 tree.delete(item)
+        if self.level_details_text:
+            self.level_details_text.configure(state=tk.NORMAL)
+            self.level_details_text.delete("1.0", tk.END)
+            self.level_details_text.configure(state=tk.DISABLED)
         if not self.analysis:
             return
 
@@ -1662,6 +1706,31 @@ class LandingAnalysisApp(tk.Tk):
 
         fill(self.support_tree, self.analysis.supports, "support")
         fill(self.resistance_tree, self.analysis.resistances, "resistance")
+        self._populate_level_details()
+
+    def _populate_level_details(self):
+        if not self.level_details_text:
+            return
+        self.level_details_text.configure(state=tk.NORMAL)
+        self.level_details_text.delete("1.0", tk.END)
+        if not self.analysis:
+            self.level_details_text.insert("1.0", "尚未執行分析")
+            self.level_details_text.configure(state=tk.DISABLED)
+            return
+
+        def render(title: str, levels: list[LevelCluster]) -> str:
+            ordered = sorted(levels, key=lambda lv: (-lv.strength, -lv.price))
+            rows = [f"{title}（共 {len(ordered)} 條）"]
+            for idx, level in enumerate(ordered, start=1):
+                rows.append(
+                    f"{idx:02d}. {level.price:,.2f}  {format_strength_display(level.strength)}"
+                    f"  ← {format_methods_zh(level.methods)}"
+                )
+            return "\n".join(rows)
+
+        text = render("支撐", self.analysis.supports) + "\n\n" + render("阻力", self.analysis.resistances)
+        self.level_details_text.insert("1.0", text)
+        self.level_details_text.configure(state=tk.DISABLED)
 
     def _populate_backtest(self):
         for item in self.trade_tree.get_children():
