@@ -21,8 +21,11 @@ from landing_analysis.scheme_c_charts import (
     draw_scheme_c,
     format_methods_zh,
     format_price_value,
+    format_strength_display,
     level_label_text,
     volume_profile_data,
+    _ladder_bar_width,
+    LADDER_STAR_X,
 )
 
 
@@ -170,6 +173,16 @@ class SchemeCChartTests(unittest.TestCase):
         label = level_label_text(100.5, 20, "★★", ["MA20"], show_methods=True)
         self.assertIn("MA20 均線", label)
         self.assertIn("\n", label)
+
+    def test_format_strength_display(self):
+        self.assertEqual(format_strength_display(3), "★★★")
+        self.assertEqual(format_strength_display(5), "★★★★★")
+        self.assertEqual(format_strength_display(9), "★★★★★ (9)")
+
+    def test_ladder_bar_width_scales_to_max_strength(self):
+        self.assertAlmostEqual(_ladder_bar_width(9, 9), 3.35)
+        self.assertAlmostEqual(_ladder_bar_width(3, 9), 3.35 * 3 / 9)
+        self.assertLessEqual(_ladder_bar_width(9, 9), LADDER_STAR_X - 0.2)
 
     def test_draw_empty_scheme_c(self):
         fig = plt.figure(figsize=(10, 7))

@@ -39,6 +39,7 @@ from landing_analysis.scheme_c_charts import (
     draw_institutional_chart,
     draw_scheme_c,
     format_methods_zh,
+    format_strength_display,
     refresh_level_price_labels,
 )
 from landing_analysis.portfolio_store import (
@@ -107,7 +108,7 @@ FONTS = {
 LEVEL_STRENGTH_LEGEND_LINES = (
     "圖表橫線旁的 ★ 與下方「強度 ★」欄相同",
     "★ 愈多＝愈多技術指標在相近價位匯聚（±2%）",
-    "1 顆＝1 項指標 · 最多顯示 5 顆",
+    "最多顯示 5 顆；超過時括號內為實際項數，例如 ★★★★★ (9)",
 )
 
 PERIOD_LABELS: dict[str, str] = {
@@ -1649,7 +1650,7 @@ class LandingAnalysisApp(tk.Tk):
                     tk.END,
                     values=(
                         f"{level.price:,.2f}",
-                        level.stars,
+                        format_strength_display(level.strength),
                         format_methods_zh(level.methods),
                     ),
                     tags=tags,

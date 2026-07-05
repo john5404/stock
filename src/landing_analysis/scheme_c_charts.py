@@ -100,6 +100,23 @@ def volume_profile_data(df: pd.DataFrame, n_bins: int = 36) -> tuple[np.ndarray,
     return centers, profile
 
 
+def format_strength_display(strength: int) -> str:
+    stars = "★" * min(strength, 5)
+    if strength > 5:
+        return f"{stars} ({strength})"
+    return stars
+
+
+def _ladder_bar_width(strength: int, max_strength: int, *, max_bar: float = 3.35) -> float:
+    if max_strength <= 0:
+        return 0.35
+    return max(0.35, max_bar * strength / max_strength)
+
+
+LADDER_HALF_WIDTH = 4.2
+LADDER_STAR_X = 3.75
+
+
 def _line_width(strength: int) -> float:
     return {1: 1.0, 2: 1.8}.get(strength, 2.8)
 
@@ -346,7 +363,7 @@ def draw_scheme_c(
             zorder=2,
         )
         label = ax_price.annotate(
-            level.stars,
+            format_strength_display(level.strength),
             xy=(0.01, level.price),
             xycoords=("axes fraction", "data"),
             xytext=(4, -6),
@@ -357,7 +374,9 @@ def draw_scheme_c(
             ha="left",
             annotation_clip=False,
         )
-        ax_price._level_labels.append((label, level.price, colors["success"], level.stars, ""))
+        ax_price._level_labels.append(
+            (label, level.price, colors["success"], format_strength_display(level.strength), "")
+        )
     for level in analysis.resistances:
         ax_price.axhline(
             level.price,
@@ -368,7 +387,7 @@ def draw_scheme_c(
             zorder=2,
         )
         label = ax_price.annotate(
-            level.stars,
+            format_strength_display(level.strength),
             xy=(1.0, level.price),
             xycoords=("axes fraction", "data"),
             xytext=(6, 0),
@@ -379,7 +398,9 @@ def draw_scheme_c(
             ha="left",
             annotation_clip=False,
         )
-        ax_price._level_labels.append((label, level.price, colors["danger"], level.stars, ""))
+        ax_price._level_labels.append(
+            (label, level.price, colors["danger"], format_strength_display(level.strength), "")
+        )
 
     ax_price.axhline(current, color=colors["warning"], linestyle=":", linewidth=1.2, alpha=0.9, zorder=5)
     ax_price._current_price_value = current
@@ -398,7 +419,7 @@ def draw_scheme_c(
         Line2D([0], [0], color=colors["success"], linestyle="--", linewidth=1.5, label="支撐"),
         Line2D([0], [0], color=colors["danger"], linestyle="--", linewidth=1.5, label="阻力"),
         Line2D([0], [0], color=colors["warning"], linestyle=":", linewidth=1.2, label="現價"),
-        Line2D([0], [0], color="none", label="★＝匯聚強度 1–5"),
+        Line2D([0], [0], color="none", label="★＝匯聚強度（最多 5 顆，可附數字）"),
     ]
     ax_price.legend(
         handles=legend_items,
@@ -414,9 +435,10 @@ def draw_scheme_c(
     y_min, y_max = _price_band(all_levels, current)
     span = max(y_max - y_min, 1e-6)
     bar_h = span * 0.018
+    max_strength = max([1] + [level.strength for level in all_levels])
 
     for level in analysis.supports:
-        width = level.strength * 0.9
+        width = _ladder_bar_width(level.strength, max_strength)
         ax_ladder.barh(
             level.price,
             width,
@@ -428,16 +450,17 @@ def draw_scheme_c(
             linewidth=0.4,
         )
         ax_ladder.text(
-            -width - 0.15,
+            -LADDER_STAR_X,
             level.price,
-            level.stars,
+            format_strength_display(level.strength),
             ha="right",
             va="center",
             fontsize=7,
             color=colors["success"],
+            clip_on=False,
         )
     for level in analysis.resistances:
-        width = level.strength * 0.9
+        width = _ladder_bar_width(level.strength, max_strength)
         ax_ladder.barh(
             level.price,
             width,
@@ -449,13 +472,14 @@ def draw_scheme_c(
             linewidth=0.4,
         )
         ax_ladder.text(
-            width + 0.15,
+            LADDER_STAR_X,
             level.price,
-            level.stars,
+            format_strength_display(level.strength),
             ha="left",
             va="center",
             fontsize=7,
             color=colors["danger"],
+            clip_on=False,
         )
 
     ax_ladder.axhline(current, color=colors["warning"], linestyle="--", linewidth=1.2, alpha=0.95)
@@ -471,7 +495,7 @@ def draw_scheme_c(
         bbox={"boxstyle": "round,pad=0.25", "facecolor": colors["surface_elevated"], "edgecolor": colors["border"], "alpha": 0.95},
     )
     ax_ladder.set_title("落點階梯", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
-    ax_ladder.set_xlim(-4.2, 4.2)
+    ax_ladder.set_xlim(-LADDER_HALF_WIDTH, LADDER_HALF_WIDTH)
     ax_ladder.set_ylim(y_min, y_max)
     ax_ladder.set_xticks([])
     ax_ladder.set_ylabel("價位", color=colors["muted"], fontsize=8)
