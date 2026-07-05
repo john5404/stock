@@ -1074,6 +1074,13 @@ class LandingAnalysisApp(tk.Tk):
             fg=COLORS["muted"],
             font=FONTS["caption"],
         ).pack(anchor=tk.W, pady=(2, 0))
+        tk.Label(
+            table_header,
+            text="強度 ★：愈多顆代表愈多技術指標在相近價位匯聚（±2%，最高 5 顆）",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            font=FONTS["caption"],
+        ).pack(anchor=tk.W, pady=(2, 0))
 
         tables_col = tk.Frame(table_card, bg=COLORS["surface"])
         tables_col.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 8))
