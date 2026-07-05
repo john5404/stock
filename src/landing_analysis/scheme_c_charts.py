@@ -78,9 +78,39 @@ def apply_price_axis_format(ax, colors: dict, *, show_ylabel: bool = False):
     ax.tick_params(axis="x", colors=colors["muted"], labelsize=8)
 
 
+def landing_chart_ylim(
+    df: pd.DataFrame,
+    all_levels: list[LevelCluster],
+    current: float,
+    lookback_days: int,
+    *,
+    padding: float = 0.05,
+) -> tuple[float, float]:
+    """Shared Y range for price, ladder, and volume-profile panels."""
+    band_lo, band_hi = _price_band(all_levels, current, padding=0.04)
+    train = df.iloc[-lookback_days:]
+    y_min = min(band_lo, float(train["Low"].min()), current)
+    y_max = max(band_hi, float(train["High"].max()), current)
+    span = max(y_max - y_min, current * 0.02)
+    pad = span * padding
+    return y_min - pad, y_max + pad
+
+
+def sync_levels_y_axes(ax_price, ax_ladder, ax_vp, y_min: float, y_max: float) -> None:
+    for ax in (ax_price, ax_ladder, ax_vp):
+        ax.set_ylim(y_min, y_max)
+
+
+def level_chart_label(level: LevelCluster, span: float, kind: str) -> str:
+    tag = "支" if kind == "support" else "阻"
+    return f"{tag} {format_price_value(level.price, span)} {format_strength_display(level.strength)}"
+
+
 def refresh_level_price_labels(ax, colors: dict):
-    for artist, _price, color, stars, _methods_zh in getattr(ax, "_level_labels", []):
-        artist.set_text(stars)
+    ymin, ymax = ax.get_ylim()
+    span = max(ymax - ymin, 1e-9)
+    for artist, level, color, kind, _methods_zh in getattr(ax, "_level_labels", []):
+        artist.set_text(level_chart_label(level, span, kind))
         artist.set_color(color)
 
 
@@ -341,10 +371,9 @@ def draw_scheme_c(
     vp_centers, vp_profile = volume_profile_data(train)
     current = analysis.current_price
     all_levels = analysis.supports + analysis.resistances
-    y_min_data = min([plot_df["Close"].min(), current] + [lv.price for lv in all_levels])
-    y_max_data = max([plot_df["Close"].max(), current] + [lv.price for lv in all_levels])
-    y_pad = max((y_max_data - y_min_data) * 0.06, current * 0.01)
-    ax_price.set_ylim(y_min_data - y_pad, y_max_data + y_pad)
+    y_min, y_max = landing_chart_ylim(df, all_levels, current, lookback_days)
+    sync_levels_y_axes(ax_price, ax_ladder, ax_vp, y_min, y_max)
+    span = max(y_max - y_min, 1e-6)
     ax_price._level_labels = []
 
     # --- Price + landing lines ---
@@ -363,20 +392,18 @@ def draw_scheme_c(
             zorder=2,
         )
         label = ax_price.annotate(
-            format_strength_display(level.strength),
+            level_chart_label(level, span, "support"),
             xy=(0.01, level.price),
             xycoords=("axes fraction", "data"),
-            xytext=(4, -6),
+            xytext=(4, 0),
             textcoords="offset points",
             color=colors["success"],
-            fontsize=8,
-            va="top",
+            fontsize=7,
+            va="center",
             ha="left",
             annotation_clip=False,
         )
-        ax_price._level_labels.append(
-            (label, level.price, colors["success"], format_strength_display(level.strength), "")
-        )
+        ax_price._level_labels.append((label, level, colors["success"], "support", ""))
     for level in analysis.resistances:
         ax_price.axhline(
             level.price,
@@ -387,20 +414,18 @@ def draw_scheme_c(
             zorder=2,
         )
         label = ax_price.annotate(
-            format_strength_display(level.strength),
-            xy=(1.0, level.price),
+            level_chart_label(level, span, "resistance"),
+            xy=(0.99, level.price),
             xycoords=("axes fraction", "data"),
-            xytext=(6, 0),
+            xytext=(-4, 0),
             textcoords="offset points",
             color=colors["danger"],
-            fontsize=8,
+            fontsize=7,
             va="center",
-            ha="left",
+            ha="right",
             annotation_clip=False,
         )
-        ax_price._level_labels.append(
-            (label, level.price, colors["danger"], format_strength_display(level.strength), "")
-        )
+        ax_price._level_labels.append((label, level, colors["danger"], "resistance", ""))
 
     ax_price.axhline(current, color=colors["warning"], linestyle=":", linewidth=1.2, alpha=0.9, zorder=5)
     ax_price._current_price_value = current
@@ -432,8 +457,6 @@ def draw_scheme_c(
     )
 
     # --- Price ladder ---
-    y_min, y_max = _price_band(all_levels, current)
-    span = max(y_max - y_min, 1e-6)
     bar_h = span * 0.018
     max_strength = max([1] + [level.strength for level in all_levels])
 
@@ -452,10 +475,10 @@ def draw_scheme_c(
         ax_ladder.text(
             -LADDER_STAR_X,
             level.price,
-            format_strength_display(level.strength),
+            level_chart_label(level, span, "support"),
             ha="right",
             va="center",
-            fontsize=7,
+            fontsize=6,
             color=colors["success"],
             clip_on=False,
         )
@@ -474,10 +497,10 @@ def draw_scheme_c(
         ax_ladder.text(
             LADDER_STAR_X,
             level.price,
-            format_strength_display(level.strength),
+            level_chart_label(level, span, "resistance"),
             ha="left",
             va="center",
-            fontsize=7,
+            fontsize=6,
             color=colors["danger"],
             clip_on=False,
         )
@@ -486,7 +509,7 @@ def draw_scheme_c(
     ax_ladder.text(
         0.02,
         0.98,
-        f"現價 {format_price_value(current, y_max - y_min)}",
+        f"現價 {format_price_value(current, span)}",
         transform=ax_ladder.transAxes,
         ha="left",
         va="top",
@@ -496,7 +519,6 @@ def draw_scheme_c(
     )
     ax_ladder.set_title("落點階梯", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
     ax_ladder.set_xlim(-LADDER_HALF_WIDTH, LADDER_HALF_WIDTH)
-    ax_ladder.set_ylim(y_min, y_max)
     ax_ladder.set_xticks([])
     ax_ladder.set_ylabel("價位", color=colors["muted"], fontsize=8)
 
@@ -523,9 +545,9 @@ def draw_scheme_c(
     ax_vp.axhline(current, color=colors["warning"], linestyle="--", linewidth=1.0, alpha=0.9)
     ax_vp.set_title("成交量價格分布", color=colors["text"], fontsize=10, fontweight="bold", pad=8)
     ax_vp.set_xlabel("成交量 (相對)", color=colors["muted"], fontsize=8)
-    ax_vp.set_ylim(y_min, y_max)
     ax_vp.set_yticklabels([])
     ax_vp.tick_params(axis="x", labelsize=7)
+    sync_levels_y_axes(ax_price, ax_ladder, ax_vp, y_min, y_max)
 
     draw_institutional_chart(
         ax_institutional,

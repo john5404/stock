@@ -41,6 +41,7 @@ from landing_analysis.scheme_c_charts import (
     format_methods_zh,
     format_strength_display,
     refresh_level_price_labels,
+    sync_levels_y_axes,
 )
 from landing_analysis.portfolio_store import (
     PortfolioPieSlice,
@@ -106,9 +107,9 @@ FONTS = {
 }
 
 LEVEL_STRENGTH_LEGEND_LINES = (
-    "圖表橫線旁的 ★ 與下方「強度 ★」欄相同",
+    "走勢圖、落點階梯、左表使用同一組價位與強度",
+    "標籤格式：支/阻 + 價位 + ★（例如 支 2,368 ★★★★★ (9)）",
     "★ 愈多＝愈多技術指標在相近價位匯聚（±2%）",
-    "最多顯示 5 顆；超過時括號內為實際項數，例如 ★★★★★ (9)",
 )
 
 PERIOD_LABELS: dict[str, str] = {
@@ -1322,6 +1323,9 @@ class LandingAnalysisApp(tk.Tk):
         self._levels_default_xlim = self.ax_price_levels.get_xlim()
         self._levels_default_ylim = self.ax_price_levels.get_ylim()
 
+    def _set_levels_ylim(self, ymin: float, ymax: float):
+        sync_levels_y_axes(self.ax_price_levels, self.ax_ladder, self.ax_volume_profile, ymin, ymax)
+
     def _on_levels_scroll(self, event):
         if event.inaxes != self.ax_price_levels or event.xdata is None or event.ydata is None:
             return
@@ -1360,7 +1364,7 @@ class LandingAnalysisApp(tk.Tk):
         new_ymax = new_ymin + new_yw
 
         ax.set_xlim(new_xmin, new_xmax)
-        ax.set_ylim(new_ymin, new_ymax)
+        self._set_levels_ylim(new_ymin, new_ymax)
         self._schedule_levels_pan_draw()
         self._schedule_levels_axis_refresh()
 
@@ -1410,7 +1414,7 @@ class LandingAnalysisApp(tk.Tk):
         dx = -(event.x - ref_x) * (xmax - xmin) / bbox.width
         dy = (event.y - ref_y) * (ymax - ymin) / bbox.height
         ax.set_xlim(xmin + dx, xmax + dx)
-        ax.set_ylim(ymin + dy, ymax + dy)
+        self._set_levels_ylim(ymin + dy, ymax + dy)
         self._schedule_levels_pan_draw()
 
     def _on_levels_release(self, event):
@@ -1443,7 +1447,7 @@ class LandingAnalysisApp(tk.Tk):
             self._levels_pan_after_id = None
         ax = self.ax_price_levels
         ax.set_xlim(self._levels_default_xlim)
-        ax.set_ylim(self._levels_default_ylim)
+        self._set_levels_ylim(self._levels_default_ylim[0], self._levels_default_ylim[1])
         self._price_pan_ref = None
         self._refresh_price_chart_view(light=False)
 
@@ -1642,7 +1646,7 @@ class LandingAnalysisApp(tk.Tk):
             return
 
         def fill(tree: ttk.Treeview, levels: list[LevelCluster], tag: str):
-            ordered = sorted(levels, key=lambda lv: lv.price, reverse=True)
+            ordered = sorted(levels, key=lambda lv: (-lv.strength, -lv.price))
             for idx, level in enumerate(ordered):
                 tags = (tag, "even") if idx % 2 else (tag,)
                 tree.insert(

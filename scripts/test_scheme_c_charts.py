@@ -22,6 +22,8 @@ from landing_analysis.scheme_c_charts import (
     format_methods_zh,
     format_price_value,
     format_strength_display,
+    landing_chart_ylim,
+    level_chart_label,
     level_label_text,
     volume_profile_data,
     _ladder_bar_width,
@@ -183,6 +185,61 @@ class SchemeCChartTests(unittest.TestCase):
         self.assertAlmostEqual(_ladder_bar_width(9, 9), 3.35)
         self.assertAlmostEqual(_ladder_bar_width(3, 9), 3.35 * 3 / 9)
         self.assertLessEqual(_ladder_bar_width(9, 9), LADDER_STAR_X - 0.2)
+
+    def test_landing_chart_ylim_aligns_panels(self):
+        import pandas as pd
+        from landing_analysis.indicators import ensure_indicators
+
+        idx = pd.bdate_range("2024-01-01", periods=120)
+        close = pd.Series(range(100, 220), index=idx, dtype=float)
+        df = ensure_indicators(
+            pd.DataFrame(
+                {
+                    "Open": close - 0.5,
+                    "High": close + 1,
+                    "Low": close - 1,
+                    "Close": close,
+                    "Volume": 1_000_000,
+                },
+                index=idx,
+            )
+        )
+        analysis = LandingAnalyzer().analyze(df, "TEST", 42)
+        fig = plt.figure(figsize=(10, 7))
+        grid = fig.add_gridspec(3, 2, width_ratios=[2.4, 1], height_ratios=[1.1, 1.0, 0.75])
+        ax_price = fig.add_subplot(grid[0:2, 0])
+        ax_ladder = fig.add_subplot(grid[0, 1])
+        ax_vp = fig.add_subplot(grid[1, 1])
+        ax_inst = fig.add_subplot(grid[2, :])
+        draw_scheme_c(
+            fig,
+            ax_price,
+            ax_ladder,
+            ax_vp,
+            ax_inst,
+            df,
+            analysis,
+            ticker="TEST",
+            strategy_name="demo",
+            colors=COLORS,
+            lookback_days=42,
+        )
+        price_ylim = ax_price.get_ylim()
+        self.assertEqual(ax_ladder.get_ylim(), price_ylim)
+        self.assertEqual(ax_vp.get_ylim(), price_ylim)
+        shared = landing_chart_ylim(df, analysis.supports + analysis.resistances, analysis.current_price, 42)
+        self.assertAlmostEqual(price_ylim[0], shared[0], places=3)
+        self.assertAlmostEqual(price_ylim[1], shared[1], places=3)
+        plt.close(fig)
+
+    def test_level_chart_label_includes_price_and_kind(self):
+        from landing_analysis.analyzer import LevelCluster
+
+        level = LevelCluster(price=2367.63, methods=["MA20"], strength=9, kind="support")
+        text = level_chart_label(level, 200, "support")
+        self.assertTrue(text.startswith("支 "))
+        self.assertIn("2,367.6", text)
+        self.assertIn("(9)", text)
 
     def test_draw_empty_scheme_c(self):
         fig = plt.figure(figsize=(10, 7))
