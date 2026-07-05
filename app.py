@@ -104,6 +104,12 @@ FONTS = {
     "kpi": ("Segoe UI", 12, "bold"),
 }
 
+LEVEL_STRENGTH_LEGEND_LINES = (
+    "圖表橫線旁的 ★ 與下方「強度 ★」欄相同",
+    "★ 愈多＝愈多技術指標在相近價位匯聚（±2%）",
+    "1 顆＝1 項指標 · 最多顯示 5 顆",
+)
+
 PERIOD_LABELS: dict[str, str] = {
     "6mo": "6 個月",
     "12mo": "12 個月",
@@ -983,6 +989,34 @@ class LandingAnalysisApp(tk.Tk):
     def _on_ticker_preset(self, _event=None):
         self._on_ticker_search_select(_event)
 
+    def _build_strength_legend(self, parent: tk.Frame) -> None:
+        box = tk.Frame(
+            parent,
+            bg=COLORS["surface_elevated"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        box.pack(fill=tk.X, padx=4, pady=(0, 8))
+        inner = tk.Frame(box, bg=COLORS["surface_elevated"])
+        inner.pack(fill=tk.X, padx=8, pady=6)
+        tk.Label(
+            inner,
+            text="★ 強度說明",
+            bg=COLORS["surface_elevated"],
+            fg=COLORS["text"],
+            font=FONTS["body_bold"],
+        ).pack(anchor=tk.W)
+        for line in LEVEL_STRENGTH_LEGEND_LINES:
+            tk.Label(
+                inner,
+                text=line,
+                bg=COLORS["surface_elevated"],
+                fg=COLORS["muted"],
+                font=FONTS["caption"],
+                wraplength=248,
+                justify=tk.LEFT,
+            ).pack(anchor=tk.W, pady=(2, 0))
+
     def _build_level_mini_table(
         self,
         parent: tk.Frame,
@@ -1003,7 +1037,7 @@ class LandingAnalysisApp(tk.Tk):
 
         cols = ("price", "strength", "methods")
         tree = ttk.Treeview(wrap, columns=cols, show="headings", height=6, style="Custom.Treeview")
-        headers = {"price": "價位", "strength": "強度", "methods": "曲線來源"}
+        headers = {"price": "價位", "strength": "強度 ★", "methods": "曲線來源"}
         widths = {"price": 72, "strength": 44, "methods": 148}
         for col in cols:
             tree.heading(col, text=headers[col])
@@ -1069,14 +1103,7 @@ class LandingAnalysisApp(tk.Tk):
         ).pack(anchor=tk.W)
         tk.Label(
             table_header,
-            text="價位 · 強度 · 曲線來源",
-            bg=COLORS["surface"],
-            fg=COLORS["muted"],
-            font=FONTS["caption"],
-        ).pack(anchor=tk.W, pady=(2, 0))
-        tk.Label(
-            table_header,
-            text="強度 ★：愈多顆代表愈多技術指標在相近價位匯聚（±2%，最高 5 顆）",
+            text="價位 · 強度 ★ · 曲線來源",
             bg=COLORS["surface"],
             fg=COLORS["muted"],
             font=FONTS["caption"],
@@ -1084,6 +1111,8 @@ class LandingAnalysisApp(tk.Tk):
 
         tables_col = tk.Frame(table_card, bg=COLORS["surface"])
         tables_col.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 8))
+
+        self._build_strength_legend(tables_col)
 
         self.support_tree = self._build_level_mini_table(
             tables_col,

@@ -398,6 +398,7 @@ def draw_scheme_c(
         Line2D([0], [0], color=colors["success"], linestyle="--", linewidth=1.5, label="支撐"),
         Line2D([0], [0], color=colors["danger"], linestyle="--", linewidth=1.5, label="阻力"),
         Line2D([0], [0], color=colors["warning"], linestyle=":", linewidth=1.2, label="現價"),
+        Line2D([0], [0], color="none", label="★＝匯聚強度 1–5"),
     ]
     ax_price.legend(
         handles=legend_items,
