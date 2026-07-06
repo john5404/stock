@@ -21,13 +21,49 @@ from landing_analysis.data_fetcher import PRESET_TICKERS, fetch_stock_data
 from landing_analysis.indicators import add_indicators
 from landing_analysis.strategies import STRATEGY_TEMPLATES, TEMPLATE_TICKERS, StrategyConfig, get_template
 
+COLORS = {
+    "bg": "#edf0f5",
+    "surface": "#ffffff",
+    "sidebar": "#131820",
+    "sidebar_elevated": "#1a2130",
+    "sidebar_border": "#2a3448",
+    "accent": "#3b82f6",
+    "accent_dark": "#2563eb",
+    "accent_soft": "#dbeafe",
+    "text": "#0f172a",
+    "text_inverse": "#f1f5f9",
+    "muted": "#64748b",
+    "muted_light": "#94a3b8",
+    "border": "#e2e8f0",
+    "success": "#16a34a",
+    "success_soft": "#dcfce7",
+    "danger": "#dc2626",
+    "danger_soft": "#fee2e2",
+    "strength_high": "#f87171",
+    "warning": "#d97706",
+    "chart_bg": "#fafbfc",
+    "tree_header": "#f8fafc",
+    "tree_zebra": "#f1f5f9",
+}
+
+FONTS = {
+    "title": ("Segoe UI", 18, "bold"),
+    "subtitle": ("Segoe UI", 10),
+    "section": ("Segoe UI", 10, "bold"),
+    "body": ("Segoe UI", 9),
+    "body_bold": ("Segoe UI", 9, "bold"),
+    "caption": ("Segoe UI", 8),
+    "kpi": ("Segoe UI", 12, "bold"),
+}
+
 
 class LandingAnalysisApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("落點分析 · Landing Point Analyzer")
-        self.geometry("1320x860")
-        self.minsize(1100, 720)
+        self.geometry("1360x900")
+        self.minsize(1140, 760)
+        self.configure(bg=COLORS["bg"])
 
         self.df: pd.DataFrame | None = None
         self.analysis = None
@@ -41,37 +77,272 @@ class LandingAnalysisApp(tk.Tk):
         self._param_vars: dict[str, tk.Variable] = {}
         self._custom_widgets: list[tk.Widget] = []
 
+        self._setup_theme()
         self._build_ui()
         self._apply_strategy_template("設備股")
 
-    def _build_ui(self):
-        self.configure(bg="#f4f6f8")
+    def _setup_theme(self):
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("Title.TLabel", font=("Segoe UI", 16, "bold"))
-        style.configure("Header.TLabel", font=("Segoe UI", 11, "bold"))
-        style.configure("Action.TButton", font=("Segoe UI", 10, "bold"), padding=8)
 
-        container = ttk.Frame(self, padding=12)
-        container.pack(fill=tk.BOTH, expand=True)
+        style.configure(".", background=COLORS["bg"], foreground=COLORS["text"], font=FONTS["body"])
+        style.configure("TFrame", background=COLORS["bg"])
+        style.configure("Surface.TFrame", background=COLORS["surface"])
+        style.configure("TLabel", background=COLORS["bg"], foreground=COLORS["text"], font=FONTS["body"])
+        style.configure("Surface.TLabel", background=COLORS["surface"], foreground=COLORS["text"])
+        style.configure("Muted.TLabel", background=COLORS["bg"], foreground=COLORS["muted"], font=FONTS["caption"])
+        style.configure("Header.TLabel", background=COLORS["surface"], foreground=COLORS["text"], font=FONTS["kpi"])
+        style.configure("Kpi.TLabel", background=COLORS["surface"], foreground=COLORS["accent_dark"], font=FONTS["kpi"])
 
-        left_wrap = ttk.Frame(container)
-        left_wrap.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
+        style.configure(
+            "Card.TLabelframe",
+            background=COLORS["surface"],
+            bordercolor=COLORS["border"],
+            relief="solid",
+            borderwidth=1,
+        )
+        style.configure(
+            "Card.TLabelframe.Label",
+            background=COLORS["surface"],
+            foreground=COLORS["text"],
+            font=FONTS["section"],
+        )
 
-        canvas = tk.Canvas(left_wrap, width=300, highlightthickness=0)
+        style.configure(
+            "TNotebook",
+            background=COLORS["bg"],
+            borderwidth=0,
+            tabmargins=(2, 4, 2, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=COLORS["bg"],
+            foreground=COLORS["muted"],
+            padding=(16, 8),
+            font=FONTS["body_bold"],
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", COLORS["surface"]), ("active", COLORS["surface"])],
+            foreground=[("selected", COLORS["accent_dark"]), ("active", COLORS["text"])],
+            expand=[("selected", (1, 1, 1, 0))],
+        )
+
+        style.configure(
+            "Dark.TCombobox",
+            fieldbackground=COLORS["sidebar_elevated"],
+            background=COLORS["sidebar_border"],
+            foreground=COLORS["text_inverse"],
+            arrowcolor=COLORS["muted_light"],
+            bordercolor=COLORS["sidebar_border"],
+            lightcolor=COLORS["sidebar_border"],
+            darkcolor=COLORS["sidebar_border"],
+        )
+        style.map(
+            "Dark.TCombobox",
+            fieldbackground=[("readonly", COLORS["sidebar_elevated"])],
+            foreground=[("readonly", COLORS["text_inverse"])],
+        )
+
+        style.configure(
+            "Dark.TEntry",
+            fieldbackground=COLORS["sidebar_elevated"],
+            foreground=COLORS["text_inverse"],
+            bordercolor=COLORS["sidebar_border"],
+            lightcolor=COLORS["sidebar_border"],
+            darkcolor=COLORS["sidebar_border"],
+            insertcolor=COLORS["text_inverse"],
+        )
+
+        style.configure(
+            "Dark.TSpinbox",
+            fieldbackground=COLORS["sidebar_elevated"],
+            foreground=COLORS["text_inverse"],
+            arrowcolor=COLORS["muted_light"],
+            bordercolor=COLORS["sidebar_border"],
+            lightcolor=COLORS["sidebar_border"],
+            darkcolor=COLORS["sidebar_border"],
+        )
+
+        style.configure(
+            "Custom.Treeview",
+            background=COLORS["surface"],
+            fieldbackground=COLORS["surface"],
+            foreground=COLORS["text"],
+            rowheight=30,
+            font=FONTS["body"],
+            borderwidth=0,
+        )
+        style.configure(
+            "Custom.Treeview.Heading",
+            background=COLORS["tree_header"],
+            foreground=COLORS["text"],
+            font=FONTS["body_bold"],
+            relief="flat",
+            borderwidth=0,
+        )
+        style.map(
+            "Custom.Treeview",
+            background=[("selected", COLORS["accent_soft"])],
+            foreground=[("selected", COLORS["accent_dark"])],
+        )
+
+        style.configure(
+            "Vertical.TScrollbar",
+            background=COLORS["border"],
+            troughcolor=COLORS["bg"],
+            bordercolor=COLORS["bg"],
+            arrowcolor=COLORS["muted"],
+        )
+
+        plt.rcParams.update(
+            {
+                "axes.facecolor": COLORS["chart_bg"],
+                "figure.facecolor": COLORS["surface"],
+                "axes.edgecolor": COLORS["border"],
+                "axes.labelcolor": COLORS["muted"],
+                "xtick.color": COLORS["muted"],
+                "ytick.color": COLORS["muted"],
+                "grid.color": COLORS["border"],
+                "grid.alpha": 0.55,
+                "font.sans-serif": ["Microsoft JhengHei", "Microsoft YaHei", "Segoe UI", "DejaVu Sans"],
+                "axes.unicode_minus": False,
+                "axes.titlesize": 12,
+                "axes.titleweight": "bold",
+            }
+        )
+
+    def _sidebar_label(self, parent, text: str, *, muted: bool = False, bold: bool = False) -> tk.Label:
+        return tk.Label(
+            parent,
+            text=text,
+            bg=COLORS["sidebar_elevated"],
+            fg=COLORS["muted_light"] if muted else COLORS["text_inverse"],
+            font=FONTS["section"] if bold else FONTS["body"],
+            anchor="w",
+        )
+
+    def _sidebar_card(self, parent, title: str) -> tk.Frame:
+        outer = tk.Frame(parent, bg=COLORS["sidebar"], highlightthickness=0)
+        outer.pack(fill=tk.X, pady=(0, 10))
+
+        card = tk.Frame(
+            outer,
+            bg=COLORS["sidebar_elevated"],
+            highlightbackground=COLORS["sidebar_border"],
+            highlightthickness=1,
+        )
+        card.pack(fill=tk.X, padx=2)
+
+        tk.Label(
+            card,
+            text=title,
+            bg=COLORS["sidebar_elevated"],
+            fg=COLORS["text_inverse"],
+            font=FONTS["section"],
+            anchor="w",
+        ).pack(fill=tk.X, padx=12, pady=(10, 6))
+
+        body = tk.Frame(card, bg=COLORS["sidebar_elevated"])
+        body.pack(fill=tk.X, padx=12, pady=(0, 12))
+        return body
+
+    def _action_button(self, parent, text: str, command, *, primary: bool = False) -> tk.Button:
+        if primary:
+            bg, fg, active = COLORS["accent"], "#ffffff", COLORS["accent_dark"]
+            border = COLORS["accent"]
+        else:
+            bg, fg, active = COLORS["sidebar_elevated"], COLORS["text_inverse"], COLORS["sidebar_border"]
+            border = COLORS["sidebar_border"]
+
+        btn = tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=bg,
+            fg=fg,
+            activebackground=active,
+            activeforeground=fg,
+            relief=tk.FLAT,
+            font=FONTS["body_bold"],
+            cursor="hand2",
+            padx=10,
+            pady=9,
+            highlightthickness=1,
+            highlightbackground=border,
+            highlightcolor=border,
+            bd=0,
+        )
+        btn.pack(fill=tk.X, pady=3)
+        return btn
+
+    def _bind_sidebar_scroll(self, canvas: tk.Canvas):
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def _bind(_event):
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        def _unbind(_event):
+            canvas.unbind_all("<MouseWheel>")
+
+        canvas.bind("<Enter>", _bind)
+        canvas.bind("<Leave>", _unbind)
+
+    def _build_ui(self):
+        header = tk.Frame(self, bg=COLORS["surface"], highlightbackground=COLORS["border"], highlightthickness=1)
+        header.pack(fill=tk.X)
+
+        header_inner = tk.Frame(header, bg=COLORS["surface"])
+        header_inner.pack(fill=tk.X, padx=20, pady=14)
+
+        brand = tk.Frame(header_inner, bg=COLORS["accent"], width=4)
+        brand.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 14))
+
+        title_block = tk.Frame(header_inner, bg=COLORS["surface"])
+        title_block.pack(side=tk.LEFT, fill=tk.Y)
+        tk.Label(title_block, text="落點分析系統", bg=COLORS["surface"], fg=COLORS["text"], font=FONTS["title"]).pack(anchor="w")
+        tk.Label(
+            title_block,
+            text="Landing Point Analyzer · 支撐阻力 · 策略回測",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            font=FONTS["subtitle"],
+        ).pack(anchor="w", pady=(2, 0))
+
+        self.header_ticker_var = tk.StringVar(value="尚未載入")
+        tk.Label(
+            header_inner,
+            textvariable=self.header_ticker_var,
+            bg=COLORS["accent_soft"],
+            fg=COLORS["accent_dark"],
+            font=FONTS["body_bold"],
+            padx=14,
+            pady=6,
+        ).pack(side=tk.RIGHT)
+
+        body = tk.Frame(self, bg=COLORS["bg"])
+        body.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
+
+        left_wrap = tk.Frame(body, bg=COLORS["sidebar"], width=320, highlightbackground=COLORS["sidebar_border"], highlightthickness=1)
+        left_wrap.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 14))
+        left_wrap.pack_propagate(False)
+
+        canvas = tk.Canvas(left_wrap, width=300, bg=COLORS["sidebar"], highlightthickness=0, bd=0)
         scrollbar = ttk.Scrollbar(left_wrap, orient=tk.VERTICAL, command=canvas.yview)
-        left = ttk.Frame(canvas)
+        left = tk.Frame(canvas, bg=COLORS["sidebar"])
         left.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=left, anchor="nw")
+        canvas.create_window((0, 0), window=left, anchor="nw", width=300)
         canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side=tk.LEFT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self._bind_sidebar_scroll(canvas)
 
-        ttk.Label(left, text="落點分析系統", style="Title.TLabel").pack(anchor=tk.W, pady=(0, 12))
+        sidebar_pad = tk.Frame(left, bg=COLORS["sidebar"])
+        sidebar_pad.pack(fill=tk.X, padx=12, pady=12)
 
         # --- Strategy template ---
-        strat_frame = ttk.LabelFrame(left, text="策略模板", padding=8)
-        strat_frame.pack(fill=tk.X, pady=(0, 8))
+        strat_frame = self._sidebar_card(sidebar_pad, "策略模板")
 
         self.strategy_var = tk.StringVar(value="設備股")
         strat_combo = ttk.Combobox(
@@ -79,77 +350,137 @@ class LandingAnalysisApp(tk.Tk):
             textvariable=self.strategy_var,
             values=list(STRATEGY_TEMPLATES.keys()),
             state="readonly",
-            width=26,
+            width=28,
+            style="Dark.TCombobox",
         )
         strat_combo.pack(fill=tk.X)
         strat_combo.bind("<<ComboboxSelected>>", self._on_strategy_change)
 
         self.strategy_desc_var = tk.StringVar()
-        ttk.Label(strat_frame, textvariable=self.strategy_desc_var, wraplength=260, justify=tk.LEFT).pack(
-            anchor=tk.W, pady=(6, 0)
-        )
-        self.strategy_summary_var = tk.StringVar()
-        ttk.Label(strat_frame, textvariable=self.strategy_summary_var, wraplength=260, foreground="#555").pack(
-            anchor=tk.W, pady=(4, 0)
-        )
+        tk.Label(
+            strat_frame,
+            textvariable=self.strategy_desc_var,
+            bg=COLORS["sidebar_elevated"],
+            fg=COLORS["muted_light"],
+            font=FONTS["body"],
+            wraplength=250,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(8, 0))
 
-        # --- Custom params ---
-        self.custom_frame = ttk.LabelFrame(left, text="自訂參數", padding=8)
-        self.custom_frame.pack(fill=tk.X, pady=(0, 8))
-        self._build_custom_params(self.custom_frame)
+        self.strategy_summary_var = tk.StringVar()
+        tk.Label(
+            strat_frame,
+            textvariable=self.strategy_summary_var,
+            bg=COLORS["sidebar_elevated"],
+            fg=COLORS["muted_light"],
+            font=FONTS["caption"],
+            wraplength=250,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(4, 0))
 
         # --- Ticker ---
-        ticker_frame = ttk.LabelFrame(left, text="標的", padding=8)
-        ticker_frame.pack(fill=tk.X, pady=(0, 8))
+        ticker_frame = self._sidebar_card(sidebar_pad, "標的")
 
-        ttk.Label(ticker_frame, text="快速選股").pack(anchor=tk.W)
+        self._sidebar_label(ticker_frame, "快速選股").pack(anchor=tk.W)
         self.ticker_preset_var = tk.StringVar()
-        self.ticker_preset_combo = ttk.Combobox(ticker_frame, textvariable=self.ticker_preset_var, width=26)
-        self.ticker_preset_combo.pack(fill=tk.X, pady=(0, 6))
+        self.ticker_preset_combo = ttk.Combobox(
+            ticker_frame, textvariable=self.ticker_preset_var, width=28, style="Dark.TCombobox"
+        )
+        self.ticker_preset_combo.pack(fill=tk.X, pady=(4, 8))
         self.ticker_preset_combo.bind("<<ComboboxSelected>>", self._on_ticker_preset)
 
+        self._sidebar_label(ticker_frame, "Ticker").pack(anchor=tk.W)
         self.custom_ticker_var = tk.StringVar(value="AMAT")
-        ttk.Label(ticker_frame, text="Ticker").pack(anchor=tk.W)
-        ttk.Entry(ticker_frame, textvariable=self.custom_ticker_var, width=28).pack(fill=tk.X)
+        ttk.Entry(ticker_frame, textvariable=self.custom_ticker_var, width=30, style="Dark.TEntry").pack(fill=tk.X, pady=(4, 0))
+
+        # --- Custom params ---
+        self.custom_frame = self._sidebar_card(sidebar_pad, "自訂參數")
+        self._build_custom_params(self.custom_frame)
 
         # --- General settings ---
-        general = ttk.LabelFrame(left, text="一般設定", padding=8)
-        general.pack(fill=tk.X, pady=(0, 8))
+        general = self._sidebar_card(sidebar_pad, "一般設定")
 
-        ttk.Label(general, text="資料期間").pack(anchor=tk.W)
+        self._sidebar_label(general, "資料期間").pack(anchor=tk.W)
         self.period_var = tk.StringVar(value="12mo")
-        ttk.Combobox(general, textvariable=self.period_var, values=["6mo", "12mo", "2y", "5y"], state="readonly", width=26).pack(fill=tk.X, pady=(0, 6))
+        ttk.Combobox(
+            general,
+            textvariable=self.period_var,
+            values=["6mo", "12mo", "2y", "5y"],
+            state="readonly",
+            width=28,
+            style="Dark.TCombobox",
+        ).pack(fill=tk.X, pady=(4, 8))
 
-        ttk.Label(general, text="分析視窗（交易日）").pack(anchor=tk.W)
+        self._sidebar_label(general, "分析視窗（交易日）").pack(anchor=tk.W)
         self.lookback_var = tk.IntVar(value=42)
-        ttk.Spinbox(general, from_=20, to=120, textvariable=self.lookback_var, width=26).pack(fill=tk.X, pady=(0, 6))
+        ttk.Spinbox(general, from_=20, to=120, textvariable=self.lookback_var, width=28, style="Dark.TSpinbox").pack(
+            fill=tk.X, pady=(4, 8)
+        )
 
-        ttk.Label(general, text="回測模式").pack(anchor=tk.W)
+        self._sidebar_label(general, "回測模式").pack(anchor=tk.W)
         self.backtest_mode_var = tk.StringVar(value="rolling")
-        ttk.Combobox(general, textvariable=self.backtest_mode_var, values=["rolling", "fixed"], state="readonly", width=26).pack(fill=tk.X)
+        ttk.Combobox(
+            general,
+            textvariable=self.backtest_mode_var,
+            values=["rolling", "fixed"],
+            state="readonly",
+            width=28,
+            style="Dark.TCombobox",
+        ).pack(fill=tk.X, pady=(4, 0))
 
-        ttk.Button(left, text="1. 載入資料", style="Action.TButton", command=self.load_data).pack(fill=tk.X, pady=(8, 4))
-        ttk.Button(left, text="2. 落點分析", style="Action.TButton", command=self.run_analysis).pack(fill=tk.X, pady=4)
-        ttk.Button(left, text="3. 執行回測", style="Action.TButton", command=self.run_backtest).pack(fill=tk.X, pady=4)
-        ttk.Button(left, text="全部執行", style="Action.TButton", command=self.run_all).pack(fill=tk.X, pady=(4, 8))
+        actions = tk.Frame(sidebar_pad, bg=COLORS["sidebar"])
+        actions.pack(fill=tk.X, pady=(4, 10))
+        self._action_button(actions, "1. 載入資料", self.load_data)
+        self._action_button(actions, "2. 落點分析", self.run_analysis)
+        self._action_button(actions, "3. 執行回測", self.run_backtest)
+        self._action_button(actions, "全部執行", self.run_all, primary=True)
 
+        status_card = tk.Frame(
+            sidebar_pad,
+            bg=COLORS["sidebar_elevated"],
+            highlightbackground=COLORS["sidebar_border"],
+            highlightthickness=1,
+        )
+        status_card.pack(fill=tk.X, pady=(0, 4))
+
+        tk.Label(status_card, text="狀態", bg=COLORS["sidebar_elevated"], fg=COLORS["muted_light"], font=FONTS["caption"]).pack(
+            anchor=tk.W, padx=12, pady=(10, 2)
+        )
         self.status_var = tk.StringVar(value="就緒")
-        ttk.Label(left, textvariable=self.status_var, wraplength=260).pack(anchor=tk.W)
-        self.summary_var = tk.StringVar(value="")
-        ttk.Label(left, textvariable=self.summary_var, wraplength=260, justify=tk.LEFT).pack(anchor=tk.W, pady=(8, 0))
+        self.status_label = tk.Label(
+            status_card,
+            textvariable=self.status_var,
+            bg=COLORS["sidebar_elevated"],
+            fg=COLORS["success"],
+            font=FONTS["body_bold"],
+            wraplength=250,
+            justify=tk.LEFT,
+        )
+        self.status_label.pack(anchor=tk.W, padx=12, pady=(0, 8))
 
-        right = ttk.Frame(container)
+        self.summary_var = tk.StringVar(value="")
+        tk.Label(
+            sidebar_pad,
+            textvariable=self.summary_var,
+            bg=COLORS["sidebar"],
+            fg=COLORS["muted_light"],
+            font=FONTS["caption"],
+            wraplength=270,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(6, 0))
+
+        right = tk.Frame(body, bg=COLORS["bg"])
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.notebook = ttk.Notebook(right)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        self.levels_frame = ttk.Frame(self.notebook)
-        self.backtest_frame = ttk.Frame(self.notebook)
-        self.chart_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.levels_frame, text="落點分析")
-        self.notebook.add(self.backtest_frame, text="回測結果")
-        self.notebook.add(self.chart_frame, text="圖表")
+        self.levels_frame = ttk.Frame(self.notebook, style="Surface.TFrame")
+        self.backtest_frame = ttk.Frame(self.notebook, style="Surface.TFrame")
+        self.chart_frame = ttk.Frame(self.notebook, style="Surface.TFrame")
+        self.notebook.add(self.levels_frame, text="  落點分析  ")
+        self.notebook.add(self.backtest_frame, text="  回測結果  ")
+        self.notebook.add(self.chart_frame, text="  圖表  ")
 
         self._build_levels_tab()
         self._build_backtest_tab()
@@ -164,12 +495,14 @@ class LandingAnalysisApp(tk.Tk):
             ("tolerance", "支撐容差 (%)", 15, 5, 30, True),
         ]
         for key, label, default, from_, to, is_pct in specs:
-            row = ttk.Frame(parent)
+            row = tk.Frame(parent, bg=COLORS["sidebar_elevated"])
             row.pack(fill=tk.X, pady=2)
-            ttk.Label(row, text=label, width=14).pack(side=tk.LEFT)
+            self._sidebar_label(row, label).pack(side=tk.LEFT)
             var = tk.DoubleVar(value=default / 100 if is_pct else default)
             self._param_vars[key] = var
-            spin = ttk.Spinbox(row, from_=from_, to=to, textvariable=var, width=10, increment=1 if not is_pct else 1)
+            spin = ttk.Spinbox(
+                row, from_=from_, to=to, textvariable=var, width=10, increment=1 if not is_pct else 1, style="Dark.TSpinbox"
+            )
             spin.pack(side=tk.RIGHT)
             self._custom_widgets.append(spin)
 
@@ -185,19 +518,31 @@ class LandingAnalysisApp(tk.Tk):
         ]:
             var = tk.BooleanVar(value=False)
             self._param_vars[key] = var
-            cb = ttk.Checkbutton(parent, text=label, variable=var, command=self._on_custom_param_change)
+            cb = tk.Checkbutton(
+                parent,
+                text=label,
+                variable=var,
+                command=self._on_custom_param_change,
+                bg=COLORS["sidebar_elevated"],
+                fg=COLORS["text_inverse"],
+                selectcolor=COLORS["sidebar_border"],
+                activebackground=COLORS["sidebar_elevated"],
+                activeforeground=COLORS["text_inverse"],
+                font=FONTS["body"],
+                anchor="w",
+            )
             cb.pack(anchor=tk.W, pady=2)
             self._custom_widgets.append(cb)
 
-        row = ttk.Frame(parent)
+        row = tk.Frame(parent, bg=COLORS["sidebar_elevated"])
         row.pack(fill=tk.X, pady=2)
-        ttk.Label(row, text="訊號確認數", width=14).pack(side=tk.LEFT)
+        self._sidebar_label(row, "訊號確認數").pack(side=tk.LEFT)
         var = tk.IntVar(value=0)
         self._param_vars["signal_confirm_min"] = var
-        spin = ttk.Spinbox(row, from_=0, to=3, textvariable=var, width=10, command=self._on_custom_param_change)
+        spin = ttk.Spinbox(row, from_=0, to=3, textvariable=var, width=10, command=self._on_custom_param_change, style="Dark.TSpinbox")
         spin.pack(side=tk.RIGHT)
         self._custom_widgets.append(spin)
-        ttk.Label(parent, text="0=全部通過，2=三選二", foreground="#666", font=("Segoe UI", 8)).pack(anchor=tk.W)
+        self._sidebar_label(parent, "0=全部通過，2=三選二", muted=True).pack(anchor=tk.W)
 
     def _set_custom_enabled(self, enabled: bool):
         state = "normal" if enabled else "disabled"
@@ -292,60 +637,147 @@ class LandingAnalysisApp(tk.Tk):
             self.custom_ticker_var.set(tickers[selected])
 
     def _build_levels_tab(self):
-        top = ttk.Frame(self.levels_frame, padding=8)
+        top = ttk.Frame(self.levels_frame, style="Surface.TFrame", padding=12)
         top.pack(fill=tk.BOTH, expand=True)
         cols = ("price", "strength", "distance", "methods")
-        self.support_tree = self._make_tree(top, "支撐落點", cols, side=tk.LEFT)
-        self.resist_tree = self._make_tree(top, "阻力落點", cols, side=tk.RIGHT)
+        self.support_tree = self._make_tree(top, "支撐落點", cols, side=tk.LEFT, accent=COLORS["success"])
+        self.resist_tree = self._make_tree(top, "阻力落點", cols, side=tk.RIGHT, accent=COLORS["danger"])
 
     def _build_backtest_tab(self):
-        frame = ttk.Frame(self.backtest_frame, padding=8)
+        frame = ttk.Frame(self.backtest_frame, style="Surface.TFrame", padding=12)
         frame.pack(fill=tk.BOTH, expand=True)
-        self.backtest_summary = ttk.Label(frame, text="尚未執行回測", style="Header.TLabel")
-        self.backtest_summary.pack(anchor=tk.W, pady=(0, 8))
+
+        summary_card = tk.Frame(
+            frame,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        summary_card.pack(fill=tk.X, pady=(0, 12))
+        summary_inner = tk.Frame(summary_card, bg=COLORS["surface"])
+        summary_inner.pack(fill=tk.X, padx=16, pady=14)
+
+        tk.Label(summary_inner, text="回測摘要", bg=COLORS["surface"], fg=COLORS["muted"], font=FONTS["caption"]).pack(anchor=tk.W)
+        self.backtest_summary = tk.Label(
+            summary_inner,
+            text="尚未執行回測",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            font=FONTS["kpi"],
+            justify=tk.LEFT,
+            wraplength=900,
+        )
+        self.backtest_summary.pack(anchor=tk.W, pady=(4, 0))
+
+        table_card = tk.Frame(
+            frame,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        table_card.pack(fill=tk.BOTH, expand=True)
+        table_inner = tk.Frame(table_card, bg=COLORS["surface"])
+        table_inner.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+
         cols = ("entry_date", "entry", "exit_date", "exit", "pnl", "reason", "support", "hold")
-        self.trade_tree = ttk.Treeview(frame, columns=cols, show="headings", height=18)
+        self.trade_tree = ttk.Treeview(table_inner, columns=cols, show="headings", height=18, style="Custom.Treeview")
         headers = {
-            "entry_date": "買入日", "entry": "買價", "exit_date": "賣出日", "exit": "賣價",
-            "pnl": "報酬%", "reason": "原因", "support": "支撐", "hold": "持有天",
+            "entry_date": "買入日",
+            "entry": "買價",
+            "exit_date": "賣出日",
+            "exit": "賣價",
+            "pnl": "報酬%",
+            "reason": "原因",
+            "support": "支撐",
+            "hold": "持有天",
         }
-        widths = {"entry_date": 100, "entry": 80, "exit_date": 100, "exit": 80, "pnl": 70, "reason": 120, "support": 80, "hold": 70}
+        widths = {
+            "entry_date": 100,
+            "entry": 80,
+            "exit_date": 100,
+            "exit": 80,
+            "pnl": 70,
+            "reason": 120,
+            "support": 80,
+            "hold": 70,
+        }
         for col in cols:
             self.trade_tree.heading(col, text=headers[col])
             self.trade_tree.column(col, width=widths[col], anchor=tk.CENTER)
+        self.trade_tree.tag_configure("gain", foreground=COLORS["success"])
+        self.trade_tree.tag_configure("loss", foreground=COLORS["danger"])
+        self.trade_tree.tag_configure("even", background=COLORS["tree_zebra"])
         self.trade_tree.pack(fill=tk.BOTH, expand=True)
 
     def _build_chart_tab(self):
+        chart_card = tk.Frame(
+            self.chart_frame,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        chart_card.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+
         self.fig, self.ax = plt.subplots(figsize=(9, 5), dpi=100)
-        self.fig.patch.set_facecolor("#ffffff")
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.chart_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self.fig.patch.set_facecolor(COLORS["surface"])
+        self.canvas = FigureCanvasTkAgg(self.fig, master=chart_card)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self._draw_empty_chart()
 
-    def _make_tree(self, parent, title, cols, side):
-        frame = ttk.LabelFrame(parent, text=title, padding=8)
+    def _make_tree(self, parent, title, cols, side, accent: str):
+        frame = tk.Frame(
+            parent,
+            bg=COLORS["surface"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
         frame.pack(side=side, fill=tk.BOTH, expand=True, padx=4)
-        tree = ttk.Treeview(frame, columns=cols, show="headings", height=20)
+
+        header = tk.Frame(frame, bg=COLORS["surface"])
+        header.pack(fill=tk.X, padx=12, pady=(12, 6))
+        tk.Frame(header, bg=accent, width=3, height=16).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Label(header, text=title, bg=COLORS["surface"], fg=COLORS["text"], font=FONTS["section"]).pack(side=tk.LEFT)
+
+        tree_wrap = tk.Frame(frame, bg=COLORS["surface"])
+        tree_wrap.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 10))
+
+        tree = ttk.Treeview(tree_wrap, columns=cols, show="headings", height=20, style="Custom.Treeview")
         headers = {"price": "價位", "strength": "強度", "distance": "距現價%", "methods": "方法"}
         widths = {"price": 90, "strength": 60, "distance": 80, "methods": 280}
         for col in cols:
             tree.heading(col, text=headers[col])
             tree.column(col, width=widths[col], anchor=tk.W if col == "methods" else tk.CENTER)
+        tree.tag_configure("stars_3", background=COLORS["strength_high"], foreground=COLORS["text"])
+        tree.tag_configure("stars_2", background=COLORS["danger_soft"], foreground=COLORS["text"])
+        tree.tag_configure("even", background=COLORS["tree_zebra"])
         tree.pack(fill=tk.BOTH, expand=True)
         return tree
+
+    def _level_row_tags(self, level, idx: int) -> tuple[str, ...]:
+        if level.strength >= 3:
+            return ("stars_3",)
+        if level.strength == 2:
+            return ("stars_2",)
+        return ("even",) if idx % 2 else ()
 
     def _resolve_ticker(self) -> str:
         return self.custom_ticker_var.get().strip().upper()
 
-    def _set_status(self, text: str):
+    def _set_status(self, text: str, *, tone: str = "info"):
+        color = {
+            "info": COLORS["success"],
+            "warn": COLORS["warning"],
+            "error": COLORS["danger"],
+        }.get(tone, COLORS["success"])
         self.status_var.set(text)
-        self.update_idletasks()
+        self.status_label.configure(fg=color)
 
     def load_data(self):
         try:
             self.engine = BacktestEngine(self._build_config_from_ui())
             self.ticker = self._resolve_ticker()
-            self._set_status(f"正在載入 {self.ticker} ...")
+            self._set_status(f"正在載入 {self.ticker} ...", tone="warn")
+            self.header_ticker_var.set(f"  {self.ticker}  ")
             self.df = fetch_stock_data(self.ticker, self.period_var.get())
             start, end = self.df.index[0].date(), self.df.index[-1].date()
             last = self.df["Close"].iloc[-1]
@@ -360,7 +792,9 @@ class LandingAnalysisApp(tk.Tk):
             self._draw_price_chart()
         except Exception as exc:
             messagebox.showerror("載入失敗", str(exc))
-            self._set_status("載入失敗")
+            self._set_status("載入失敗", tone="error")
+            return
+        self.run_analysis()
 
     def run_analysis(self):
         if self.df is None:
@@ -374,6 +808,7 @@ class LandingAnalysisApp(tk.Tk):
             self._set_status("落點分析完成")
         except Exception as exc:
             messagebox.showerror("分析失敗", str(exc))
+            self._set_status("分析失敗", tone="error")
 
     def run_backtest(self):
         if self.df is None:
@@ -393,11 +828,11 @@ class LandingAnalysisApp(tk.Tk):
             self._set_status(f"回測完成 [{self.strategy_var.get()} / {mode}]")
         except Exception as exc:
             messagebox.showerror("回測失敗", str(exc))
+            self._set_status("回測失敗", tone="error")
 
     def run_all(self):
         self.load_data()
         if self.df is not None:
-            self.run_analysis()
             self.run_backtest()
 
     def _populate_levels(self):
@@ -407,12 +842,22 @@ class LandingAnalysisApp(tk.Tk):
         if not self.analysis:
             return
         current = self.analysis.current_price
-        for level in self.analysis.supports:
+        for idx, level in enumerate(self.analysis.supports):
             dist = (level.price / current - 1) * 100
-            self.support_tree.insert("", tk.END, values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)))
-        for level in self.analysis.resistances:
+            self.support_tree.insert(
+                "",
+                tk.END,
+                values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)),
+                tags=self._level_row_tags(level, idx),
+            )
+        for idx, level in enumerate(self.analysis.resistances):
             dist = (level.price / current - 1) * 100
-            self.resist_tree.insert("", tk.END, values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)))
+            self.resist_tree.insert(
+                "",
+                tk.END,
+                values=(f"{level.price:,.2f}", level.stars, f"{dist:+.1f}%", ", ".join(level.methods)),
+                tags=self._level_row_tags(level, idx),
+            )
         self.summary_var.set(
             f"模板: {self.strategy_var.get()}\n"
             f"Ticker: {self.ticker}\n"
@@ -431,22 +876,50 @@ class LandingAnalysisApp(tk.Tk):
         mode_label = "滾動視窗" if result.mode == "rolling" else "固定前N日"
         self.backtest_summary.config(
             text=(
-                f"模板: {result.strategy_name} | 模式: {mode_label} | "
-                f"交易: {len(result.trades)} 筆 | 勝率: {result.win_rate:.0f}% | "
-                f"複利: {result.compound_return:+.1f}% | Buy&Hold: {result.buy_hold_pct:+.1f}%"
+                f"{result.strategy_name}  ·  {mode_label}  ·  "
+                f"{len(result.trades)} 筆交易  ·  勝率 {result.win_rate:.0f}%  ·  "
+                f"複利 {result.compound_return:+.1f}%  ·  Buy&Hold {result.buy_hold_pct:+.1f}%"
             )
         )
-        for trade in result.trades:
-            self.trade_tree.insert("", tk.END, values=(
-                trade.entry_date.date(), f"{trade.entry_price:,.2f}",
-                trade.exit_date.date(), f"{trade.exit_price:,.2f}",
-                f"{trade.pnl_pct:+.1f}", trade.reason, f"{trade.support_price:,.2f}", trade.hold_days,
-            ))
+        for idx, trade in enumerate(result.trades):
+            pnl = trade.pnl_pct
+            tags = []
+            if idx % 2:
+                tags.append("even")
+            tags.append("gain" if pnl >= 0 else "loss")
+            self.trade_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    trade.entry_date.date(),
+                    f"{trade.entry_price:,.2f}",
+                    trade.exit_date.date(),
+                    f"{trade.exit_price:,.2f}",
+                    f"{pnl:+.1f}",
+                    trade.reason,
+                    f"{trade.support_price:,.2f}",
+                    trade.hold_days,
+                ),
+                tags=tuple(tags),
+            )
 
     def _draw_empty_chart(self):
         self.ax.clear()
-        self.ax.set_title("請載入資料後顯示圖表")
-        self.ax.grid(True, alpha=0.3)
+        self.ax.set_facecolor(COLORS["chart_bg"])
+        self.ax.set_title("請載入資料後顯示圖表", color=COLORS["muted"], pad=12)
+        self.ax.text(
+            0.5,
+            0.5,
+            "載入股票資料後，這裡會顯示價格走勢、均線與買賣點",
+            transform=self.ax.transAxes,
+            ha="center",
+            va="center",
+            color=COLORS["muted"],
+            fontsize=10,
+        )
+        self.ax.grid(True, alpha=0.35)
+        for spine in self.ax.spines.values():
+            spine.set_color(COLORS["border"])
         self.canvas.draw()
 
     def _draw_price_chart(self):
@@ -454,32 +927,60 @@ class LandingAnalysisApp(tk.Tk):
             self._draw_empty_chart()
             return
         self.ax.clear()
+        self.ax.set_facecolor(COLORS["chart_bg"])
         plot_df = add_indicators(self.df.tail(180))
         dates = plot_df.index
-        self.ax.plot(dates, plot_df["Close"], color="#1f77b4", linewidth=1.8, label="Close")
+        self.ax.plot(dates, plot_df["Close"], color=COLORS["accent_dark"], linewidth=2.2, label="Close", zorder=3)
         if plot_df["MA20"].notna().any():
-            self.ax.plot(dates, plot_df["MA20"], color="#ff9800", linewidth=1, alpha=0.8, label="MA20")
+            self.ax.plot(dates, plot_df["MA20"], color="#f59e0b", linewidth=1.2, alpha=0.85, label="MA20", zorder=2)
         if plot_df["MA50"].notna().any():
-            self.ax.plot(dates, plot_df["MA50"], color="#4caf50", linewidth=1, alpha=0.8, label="MA50")
+            self.ax.plot(dates, plot_df["MA50"], color="#10b981", linewidth=1.2, alpha=0.85, label="MA50", zorder=2)
         if self.analysis:
             for level in self.analysis.supports:
-                self.ax.axhline(level.price, color="#2e7d32", linestyle="--", alpha=0.35, linewidth=1)
+                self.ax.axhline(level.price, color=COLORS["success"], linestyle="--", alpha=0.4, linewidth=1, zorder=1)
             for level in self.analysis.resistances:
-                self.ax.axhline(level.price, color="#c62828", linestyle="--", alpha=0.35, linewidth=1)
+                self.ax.axhline(level.price, color=COLORS["danger"], linestyle="--", alpha=0.4, linewidth=1, zorder=1)
         if self.backtest_result and self.backtest_result.trades:
             for trade in self.backtest_result.trades:
-                self.ax.scatter(trade.entry_date, trade.entry_price, color="#00c853", s=60, zorder=5)
-                self.ax.scatter(trade.exit_date, trade.exit_price, color="#d50000", s=60, zorder=5)
-                self.ax.plot([trade.entry_date, trade.exit_date], [trade.entry_price, trade.exit_price], color="#9e9e9e", alpha=0.5, linewidth=1)
+                self.ax.scatter(
+                    trade.entry_date,
+                    trade.entry_price,
+                    color=COLORS["success"],
+                    s=70,
+                    zorder=5,
+                    edgecolors="white",
+                    linewidths=0.8,
+                )
+                self.ax.scatter(
+                    trade.exit_date,
+                    trade.exit_price,
+                    color=COLORS["danger"],
+                    s=70,
+                    zorder=5,
+                    edgecolors="white",
+                    linewidths=0.8,
+                )
+                self.ax.plot(
+                    [trade.entry_date, trade.exit_date],
+                    [trade.entry_price, trade.exit_price],
+                    color=COLORS["muted_light"],
+                    alpha=0.55,
+                    linewidth=1,
+                    zorder=4,
+                )
         legend_items = [
-            Line2D([0], [0], color="#1f77b4", linewidth=2, label="Close"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor="#00c853", markersize=8, label="Buy"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor="#d50000", markersize=8, label="Sell"),
+            Line2D([0], [0], color=COLORS["accent_dark"], linewidth=2.2, label="Close"),
+            Line2D([0], [0], color="#f59e0b", linewidth=1.2, label="MA20"),
+            Line2D([0], [0], color="#10b981", linewidth=1.2, label="MA50"),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["success"], markersize=8, label="Buy"),
+            Line2D([0], [0], marker="o", color="w", markerfacecolor=COLORS["danger"], markersize=8, label="Sell"),
         ]
-        self.ax.legend(handles=legend_items, loc="upper left")
-        self.ax.set_title(f"{self.ticker} [{self.strategy_var.get()}]")
-        self.ax.grid(True, alpha=0.25)
+        self.ax.legend(handles=legend_items, loc="upper left", frameon=True, fancybox=True, framealpha=0.95)
+        self.ax.set_title(f"{self.ticker}  ·  {self.strategy_var.get()}", color=COLORS["text"], pad=12)
+        self.ax.grid(True, alpha=0.35)
         self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        for spine in self.ax.spines.values():
+            spine.set_color(COLORS["border"])
         self.fig.autofmt_xdate()
         self.canvas.draw()
 
