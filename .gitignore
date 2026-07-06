@@ -32,3 +32,6 @@ venv/
 dist/
 build/
 .pytest_cache/
+
+# Local market data cache
+data/*.csv
