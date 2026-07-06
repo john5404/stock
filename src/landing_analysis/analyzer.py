@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .indicators import add_indicators, atr, bollinger, moving_average
+from .indicators import atr, bollinger, ensure_indicators, moving_average
 
 
 @dataclass
@@ -100,7 +100,7 @@ class LandingAnalyzer:
             raise ValueError(f"Need at least {max(lookback_days, 20)} rows, got {len(df)}")
 
         train = df.iloc[-lookback_days:].copy()
-        train = add_indicators(train)
+        train = ensure_indicators(train)
         swing_high = float(train["High"].max())
         swing_low = float(train["Low"].min())
         current_price = float(df["Close"].iloc[-1])

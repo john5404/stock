@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .analyzer import LandingAnalyzer, LevelCluster
-from .indicators import add_indicators
+from .indicators import ensure_indicators
 from .strategies import StrategyConfig
 
 
@@ -78,7 +78,7 @@ class BacktestEngine:
         if len(df) <= lookback_days + 5:
             raise ValueError("Not enough data for fixed-window backtest")
 
-        enriched = add_indicators(df)
+        enriched = ensure_indicators(df)
         train = enriched.iloc[:lookback_days]
         test = enriched.iloc[lookback_days:]
         analysis = self.analyzer.analyze(train, ticker, lookback_days)
@@ -102,7 +102,7 @@ class BacktestEngine:
         if len(df) <= lookback_days + 5:
             raise ValueError("Not enough data for rolling backtest")
 
-        enriched = add_indicators(df)
+        enriched = ensure_indicators(df)
         trades: list[Trade] = []
         position = None
 
