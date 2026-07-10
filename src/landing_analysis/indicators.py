@@ -99,3 +99,13 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     out["Bullish_Candle"] = out["Hammer"] | out["Bull_Engulf"]
 
     return out
+
+
+def has_indicators(df: pd.DataFrame) -> bool:
+    return "MA20" in df.columns and "RSI" in df.columns
+
+
+def ensure_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    if has_indicators(df):
+        return df
+    return add_indicators(df)
